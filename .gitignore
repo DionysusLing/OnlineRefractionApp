@@ -1,0 +1,6 @@
+DerivedData/
+*.xcuserdatad
+*.xcuserstate
+*.xcscmblueprint
+.DS_Store
+github.txt
