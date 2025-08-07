@@ -6,32 +6,49 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXContainerItemProxy section */
-		8CFF68C72E38E11B00250047 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 8CFF68B02E38E11B00250047 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 8CFF68B72E38E11B00250047;
-			remoteInfo = OnlineRefractionApp;
-		};
-		8CFF68D12E38E11B00250047 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 8CFF68B02E38E11B00250047 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 8CFF68B72E38E11B00250047;
-			remoteInfo = OnlineRefractionApp;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
 		8CFF68B82E38E11B00250047 /* OnlineRefractionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OnlineRefractionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8CFF68C62E38E11B00250047 /* OnlineRefractionAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OnlineRefractionAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8CFF68D02E38E11B00250047 /* OnlineRefractionAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OnlineRefractionAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8C45451C2E3F5043007A403D /* Exceptions for "OnlineRefractionAppUITests" folder in "OnlineRefractionApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				OnlineRefractionAppUITests.swift,
+			);
+			target = 8CFF68B72E38E11B00250047 /* OnlineRefractionApp */;
+		};
+		8C663CFD2E40B65F00B3F48F /* Exceptions for "OnlineRefractionApp" folder in "OnlineRefractionApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ContentView.swift,
+				Features/Prototypes/Astig/AstigFlowView.swift,
+				Features/Prototypes/Astig/AstigVM.swift,
+				Features/Prototypes/Common/SpeechDelegate.swift,
+				Features/Prototypes/Common/TDRangeVM.swift,
+				Features/Prototypes/Vision/Subviews/BlueAdaptStimulusView.swift,
+				Features/Prototypes/Vision/Subviews/CoarseStairView.swift,
+				Features/Prototypes/Vision/Subviews/DistancePrepView.swift,
+				Features/Prototypes/Vision/Subviews/FineStairView.swift,
+				Features/Prototypes/Vision/Subviews/LetterConfirmView.swift,
+				Features/Prototypes/Vision/Subviews/ResultView.swift,
+				Features/Prototypes/Vision/Subviews/TwoAFCStimulusView.swift,
+				Features/Prototypes/Vision/Subviews/VisualAcuityStimulusView.swift,
+				Features/Prototypes/Vision/VisionFlowView.swift,
+				Features/Prototypes/Vision/VisionVM.swift,
+				Info.plist,
+				Services/SpeechServicing.swift,
+			);
+			target = 8CFF68B72E38E11B00250047 /* OnlineRefractionApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8CFF68BA2E38E11B00250047 /* OnlineRefractionApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8C663CFD2E40B65F00B3F48F /* Exceptions for "OnlineRefractionApp" folder in "OnlineRefractionApp" target */,
+			);
 			path = OnlineRefractionApp;
 			sourceTree = "<group>";
 		};
@@ -42,6 +59,9 @@
 		};
 		8CFF68D32E38E11B00250047 /* OnlineRefractionAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8C45451C2E3F5043007A403D /* Exceptions for "OnlineRefractionAppUITests" folder in "OnlineRefractionApp" target */,
+			);
 			path = OnlineRefractionAppUITests;
 			sourceTree = "<group>";
 		};
@@ -49,20 +69,6 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		8CFF68B52E38E11B00250047 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8CFF68C32E38E11B00250047 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8CFF68CD2E38E11B00250047 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -86,8 +92,6 @@
 			isa = PBXGroup;
 			children = (
 				8CFF68B82E38E11B00250047 /* OnlineRefractionApp.app */,
-				8CFF68C62E38E11B00250047 /* OnlineRefractionAppTests.xctest */,
-				8CFF68D02E38E11B00250047 /* OnlineRefractionAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -117,52 +121,6 @@
 			productReference = 8CFF68B82E38E11B00250047 /* OnlineRefractionApp.app */;
 			productType = "com.apple.product-type.application";
 		};
-		8CFF68C52E38E11B00250047 /* OnlineRefractionAppTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 8CFF68DD2E38E11B00250047 /* Build configuration list for PBXNativeTarget "OnlineRefractionAppTests" */;
-			buildPhases = (
-				8CFF68C22E38E11B00250047 /* Sources */,
-				8CFF68C32E38E11B00250047 /* Frameworks */,
-				8CFF68C42E38E11B00250047 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				8CFF68C82E38E11B00250047 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				8CFF68C92E38E11B00250047 /* OnlineRefractionAppTests */,
-			);
-			name = OnlineRefractionAppTests;
-			packageProductDependencies = (
-			);
-			productName = OnlineRefractionAppTests;
-			productReference = 8CFF68C62E38E11B00250047 /* OnlineRefractionAppTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		8CFF68CF2E38E11B00250047 /* OnlineRefractionAppUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 8CFF68E02E38E11B00250047 /* Build configuration list for PBXNativeTarget "OnlineRefractionAppUITests" */;
-			buildPhases = (
-				8CFF68CC2E38E11B00250047 /* Sources */,
-				8CFF68CD2E38E11B00250047 /* Frameworks */,
-				8CFF68CE2E38E11B00250047 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				8CFF68D22E38E11B00250047 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				8CFF68D32E38E11B00250047 /* OnlineRefractionAppUITests */,
-			);
-			name = OnlineRefractionAppUITests;
-			packageProductDependencies = (
-			);
-			productName = OnlineRefractionAppUITests;
-			productReference = 8CFF68D02E38E11B00250047 /* OnlineRefractionAppUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -176,17 +134,9 @@
 					8CFF68B72E38E11B00250047 = {
 						CreatedOnToolsVersion = 16.4;
 					};
-					8CFF68C52E38E11B00250047 = {
-						CreatedOnToolsVersion = 16.4;
-						TestTargetID = 8CFF68B72E38E11B00250047;
-					};
-					8CFF68CF2E38E11B00250047 = {
-						CreatedOnToolsVersion = 16.4;
-						TestTargetID = 8CFF68B72E38E11B00250047;
-					};
 				};
 			};
-			buildConfigurationList = 8CFF68B32E38E11B00250047 /* Build configuration list for PBXProject "OnlineRefractionApp" */;
+			buildConfigurationList = 8CFF68B32E38E11B00250047 /* Build configuration list for PBXProject "线上验光" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -201,28 +151,12 @@
 			projectRoot = "";
 			targets = (
 				8CFF68B72E38E11B00250047 /* OnlineRefractionApp */,
-				8CFF68C52E38E11B00250047 /* OnlineRefractionAppTests */,
-				8CFF68CF2E38E11B00250047 /* OnlineRefractionAppUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		8CFF68B62E38E11B00250047 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8CFF68C42E38E11B00250047 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8CFF68CE2E38E11B00250047 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -239,34 +173,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8CFF68C22E38E11B00250047 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8CFF68CC2E38E11B00250047 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		8CFF68C82E38E11B00250047 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 8CFF68B72E38E11B00250047 /* OnlineRefractionApp */;
-			targetProxy = 8CFF68C72E38E11B00250047 /* PBXContainerItemProxy */;
-		};
-		8CFF68D22E38E11B00250047 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 8CFF68B72E38E11B00250047 /* OnlineRefractionApp */;
-			targetProxy = 8CFF68D12E38E11B00250047 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		8CFF68D82E38E11B00250047 /* Debug */ = {
@@ -397,6 +304,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OnlineRefractionApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "线上验光";
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于前置相机的 TrueDepth 测距";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -436,6 +346,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OnlineRefractionApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "线上验光";
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于前置相机的 TrueDepth 测距";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -463,100 +376,10 @@
 			};
 			name = Release;
 		};
-		8CFF68DE2E38E11B00250047 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4AJ9P5455C;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dionysus.OnlineRefractionAppTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OnlineRefractionApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OnlineRefractionApp";
-				XROS_DEPLOYMENT_TARGET = 2.5;
-			};
-			name = Debug;
-		};
-		8CFF68DF2E38E11B00250047 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4AJ9P5455C;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dionysus.OnlineRefractionAppTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OnlineRefractionApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OnlineRefractionApp";
-				XROS_DEPLOYMENT_TARGET = 2.5;
-			};
-			name = Release;
-		};
-		8CFF68E12E38E11B00250047 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4AJ9P5455C;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dionysus.OnlineRefractionAppUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = OnlineRefractionApp;
-				XROS_DEPLOYMENT_TARGET = 2.5;
-			};
-			name = Debug;
-		};
-		8CFF68E22E38E11B00250047 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 4AJ9P5455C;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
-				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dionysus.OnlineRefractionAppUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = OnlineRefractionApp;
-				XROS_DEPLOYMENT_TARGET = 2.5;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		8CFF68B32E38E11B00250047 /* Build configuration list for PBXProject "OnlineRefractionApp" */ = {
+		8CFF68B32E38E11B00250047 /* Build configuration list for PBXProject "线上验光" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				8CFF68D82E38E11B00250047 /* Debug */,
@@ -570,24 +393,6 @@
 			buildConfigurations = (
 				8CFF68DB2E38E11B00250047 /* Debug */,
 				8CFF68DC2E38E11B00250047 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		8CFF68DD2E38E11B00250047 /* Build configuration list for PBXNativeTarget "OnlineRefractionAppTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				8CFF68DE2E38E11B00250047 /* Debug */,
-				8CFF68DF2E38E11B00250047 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		8CFF68E02E38E11B00250047 /* Build configuration list for PBXNativeTarget "OnlineRefractionAppUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				8CFF68E12E38E11B00250047 /* Debug */,
-				8CFF68E22E38E11B00250047 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

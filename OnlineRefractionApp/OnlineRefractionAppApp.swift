@@ -1,17 +1,12 @@
-//
-//  OnlineRefractionAppApp.swift
-//  OnlineRefractionApp
-//
-//  Created by dionysus on 2025/7/29.
-//
-
 import SwiftUI
 
 @main
 struct OnlineRefractionAppApp: App {
+    @StateObject private var services = AppServices()
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRouter()
+                .environmentObject(services)
         }
     }
 }
