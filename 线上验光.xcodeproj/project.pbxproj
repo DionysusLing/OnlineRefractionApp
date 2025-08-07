@@ -306,7 +306,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OnlineRefractionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "线上验光";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于前置相机的 TrueDepth 测距";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于播放和录制语音指令";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "用于将验光单保存到相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -348,7 +351,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OnlineRefractionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "线上验光";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于前置相机的 TrueDepth 测距";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于播放和录制语音指令";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "用于将验光单保存到相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

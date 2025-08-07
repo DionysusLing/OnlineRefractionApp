@@ -152,6 +152,79 @@ struct TypeCodeView: View {
     private let inputFieldHeight: CGFloat = 50
     private let inputFieldFont: Font      = .system(size: 20)
 
+    // —— 样例文案
+        private let serviceAgreementText = """
+        欢迎您使用“在线验光”应用（以下简称“本应用”）。在开始使用本应用前，请您务必仔细阅读并充分理解本《用户条款》。您使用本应用即视为接受并同意遵守本条款的全部内容。
+
+        一、服务内容
+        本应用基于手机前置摄像头、传感器及相关算法，为用户提供在线视力检测与验光服务，包括但不限于球镜、柱镜和散光轴位检测功能。本应用不代替专业眼科检查，仅供日常自测和参考。
+
+        二、用户资格与义务
+
+        用户应为具有完全民事行为能力的自然人或法人。未满18周岁的未成年人，应在监护人指导下使用。
+
+        用户应保证提供的信息真实、准确、完整，并对所填信息的合法性和安全性负责。
+
+        用户应合理使用本应用，不得利用本应用实施任何违法或有损他人合法权益的行为。
+
+        三、隐私与数据保护
+
+        本应用会根据功能需要，收集用户在测试过程中的摄像头数据、测距信息和测试结果，并在本地或云端进行加密存储。
+
+        我们承诺不将用户个人数据用于本条款约定之外的用途，未经用户同意，不会向第三方出售或提供。
+
+        用户可以随时在“设置”中删除本地测试记录。如需彻底删除云端数据，请联系客服。
+
+        四、知识产权
+        本应用及其各项功能、界面设计、算法模型、源代码和相关文档等，均受著作权法和相关法律保护。未经授权，任何个人或组织不得擅自复制、修改、发布、传播或用于商业用途。
+
+        五、免责声明
+
+        本应用提供的测试结果仅供参考，不能替代专业眼科诊断。如测试结果提示异常或存在视力问题，请及时就医。
+
+        因网络、设备或系统等原因，可能导致测试中断或数据误差，我们对此类情况不承担任何责任。
+
+        对于因使用或无法使用本应用而导致的任何直接或间接损失，我们在法律允许的范围内免责。
+
+        六、条款修改与终止
+
+        本应用保留随时修改、更新本条款的权利，并在应用内公告更新内容，不另行单独通知。
+
+        若您不同意修改后的条款，应立即停止使用本应用。继续使用即视为接受修改。
+
+        如用户严重违反本条款，本应用有权终止或限制其使用权限。
+
+        七、适用法律与争议解决
+        本条款的订立、生效、解释和履行均适用中华人民共和国法律。如发生争议，双方应友好协商；协商不成时，可向本应用所在地有管辖权的人民法院提起诉讼。
+
+        八、其他
+        本条款构成您与本应用之间关于使用服务的完整协议。如本条款中的任何条款被认定为无效或不可执行，不影响其他条款的效力。
+
+        感谢您的使用，祝您体验愉快！
+        """
+
+        private let privacyPolicyText = """
+        我们非常重视您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息：
+
+        1. 信息收集
+        在使用本服务过程中，我们可能收集设备信息、操作日志及您主动提供的数据。
+
+        2. 信息使用
+        这些信息仅用于改进服务体验和保障功能正常运行，不会用于未获授权的目的。
+
+        3. 信息共享
+        除非法律法规要求或得到您的明确同意，我们不会向第三方分享您的个人信息。
+
+        4. 信息安全
+        我们采取合理的安全措施保护您的信息，防止未经授权的访问、披露或破坏。
+
+        5. 权益保障
+        您有权查询、更正或删除个人信息。如对本政策有疑问，请通过应用内方式联系我们。
+
+        6. 政策更新
+        本政策可能适时修订，更新后将在应用中公布。继续使用即表示您同意最新政策。
+        """
+    
     private var canProceed: Bool {
         guard agreed else { return false }               // 协议未同意则不行
         let trimmed = code.trimmingCharacters(in: .whitespaces)
@@ -166,8 +239,16 @@ struct TypeCodeView: View {
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
-            Spacer()
+            Color.clear
+                .frame(height: 10)
 
+            Image("mainpic")
+                .resizable()
+                .scaledToFit()
+                .frame(width:280, height: 280)
+            Color.clear.frame(height: 30)
+
+            
             // 年龄行
             HStack(spacing: 18) {
                 Image(Asset.icoAge)
@@ -176,8 +257,8 @@ struct TypeCodeView: View {
                     .font(.system(size: 20))
                     .foregroundColor(.black)
                 Spacer()
-                Image(Asset.chChecked)              // 一次调用就够了
-                    .renderingMode(.template)       // 直接在 Image() 后面
+                Image(Asset.chChecked)
+                    .renderingMode(.template)
                     .resizable().frame(width: 22, height: 22)
                     .foregroundColor(ageOK ? .blue : .gray)
                     .onTapGesture {
@@ -204,7 +285,7 @@ struct TypeCodeView: View {
                     }
             }
 
-            Color.clear.frame(height: 10)
+
 
             // 邀请码输入
             TextField("点击这里输入或粘贴邀请码", text: $code)
@@ -224,7 +305,6 @@ struct TypeCodeView: View {
                 .onSubmit { tryProceed() }
                 .padding(.vertical, 4)
 
-            Color.clear.frame(height: 240)
 
 
             // 服务协议行
@@ -250,8 +330,10 @@ struct TypeCodeView: View {
                     .foregroundColor(.blue)
             }
             .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 4)
 
+            
+            Color.clear.frame(height: 50)
+            
             VoiceBar().scaleEffect(0.5)
         }
         .pagePadding()
@@ -266,18 +348,27 @@ struct TypeCodeView: View {
 
         
         // MARK: 协议弹框
-        .sheet(isPresented: $showingService) {
-            NavigationStack {
-                Text("服务协议内容占位")
-                    .navigationTitle("服务协议")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-        }
+      .sheet(isPresented: $showingService) {
+          NavigationStack {
+              ScrollView {
+                  Text(serviceAgreementText)
+                      .frame(maxWidth: .infinity, alignment: .leading)
+                      .padding()
+              }
+              .navigationTitle("服务协议")
+              .navigationBarTitleDisplayMode(.inline)
+          }
+      }
         .sheet(isPresented: $showingPrivacy) {
             NavigationStack {
-                Text("隐私条款内容占位")
-                    .navigationTitle("隐私条款")
-                    .navigationBarTitleDisplayMode(.inline)
+                ScrollView {
+                    Text(privacyPolicyText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("隐私条款")
+                .navigationBarTitleDisplayMode(.inline)
+                
             }
         }
     }
@@ -390,7 +481,7 @@ struct ChecklistView: View {
             }
             Button("我再看看", role: .cancel) {}
         } message: {
-            Text("路径：设置 → 辅助功能 → 显示与文字大小 → 关闭“自动亮度”。（iOS 不支持直接跳到该子页面）")
+            Text("路径：设置 → 辅助功能 → 显示与文字大小 → 关闭“自动亮度”")
         }
 
         // 返回后的确认
@@ -439,18 +530,6 @@ private struct ChecklistRow: View {
 }
 
 
-#if DEBUG
-struct ChecklistView_Previews: PreviewProvider {
-    static var previews: some View {
-        ChecklistView()
-            .environmentObject(AppState())
-            .environmentObject(AppServices())
-            .previewDisplayName("Checklist")
-            .previewDevice("iPhone 15 Pro")
-    }
-}
-#endif
-
 // MARK: - 4. PD 1/2/3（仅第一次播报；无“完成”播报）
 struct PDView: View {
     @EnvironmentObject var state: AppState
@@ -462,6 +541,7 @@ struct PDView: View {
     @State private var isCapturing = false
     @State private var retryCount = 0
     @State private var hasSpokenIntro = false
+    @State private var didHighlight = false
 
     // px → pt（直径 800px、距顶部 512px）
     private var scale: CGFloat { UIScreen.main.scale }
@@ -474,15 +554,23 @@ struct PDView: View {
                 Color.black.ignoresSafeArea()
 
                 // 圆形取景
-                let small = circleDiameterPt * 1.0   // 80%
+                let small = circleDiameterPt * 1.0   // 100%
+                let diameter = circleDiameterPt
 
                 FacePreviewView(arSession: pdSvc.arSession)
                     .clipShape(Circle())
-                    .frame(width: small, height: small)
+                    .frame(width: diameter, height: diameter)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.green, lineWidth: 10)
+                            .opacity(didHighlight ? 1 : 0)
+                    )
                     .position(
                         x: geo.size.width / 2,
                         y: circleTopOffsetPt + small / 2
                     )
+                // ← 新增：闪绿环 overlay
+
                 // 顶部提示（不用 clamped，避免访问级别冲突）
                 let yTop = max(24, min(circleTopOffsetPt - 28, geo.size.height - 24))
                 Text("请与手机保持约 35 厘米，并正视屏幕")
@@ -548,23 +636,30 @@ struct PDView: View {
         guard !isCapturing else { return }
         isCapturing = true
         pdSvc.captureOnce { ipd in
-            isCapturing = false
-            if let ipd = ipd {
-                services.speech.speak("嘀")
-                store(ipd: ipd)
-                proceed()
-            } else {
-                retryCount += 1
-               // if retryCount % 3 == 1 {
-               // services.speech.speak("未能稳定捕获，请将脸靠近或远离到三十五厘米，并保持稳定。")
-               // }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    startCaptureLoop()
+            DispatchQueue.main.async {
+                isCapturing = false
+                if let ipd = ipd {
+                    flashHighlight()
+                    store(ipd: ipd)
+                    proceed()
+                } else {
+                    retryCount += 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        startCaptureLoop()
+                    }
                 }
             }
         }
     }
-
+    // 两轮闪烁
+    private func flashHighlight() {
+        didHighlight = true
+        // 两轮出现–消失：0.125s/0.25s/0.375s 切换
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.125) { didHighlight = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25)  { didHighlight = true  }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.375) { didHighlight = false }
+    }
+    
     private func store(ipd: Double) {
         switch index {
         case 1: state.pd1_mm = ipd
@@ -637,6 +732,7 @@ struct PDView: View {
 }
 
 
+
 // MARK: - CYL 统一入口（AppRouter 写法保持不变）
 struct CYLAxialView: View {
     let eye: Eye
@@ -675,8 +771,15 @@ struct CYLAxialAView: View {
             guard !didSpeak else { return }
             didSpeak = true
             services.speech.stop()
+
+            // 根据当前是右眼还是左眼，选择不同的播报文字
+            let instruction = "如果看不到清晰黑色实线，选择无清晰黑色实线；若看到，选择有清晰黑色实线。"
+            let prompt = eye == .right
+                ? "请闭上左眼，右眼看散光盘。" + instruction
+                : "请闭上右眼，左眼看散光盘。" + instruction
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak("请看散光盘。如果看不到清晰黑色实线，选择无清晰黑色实线；若看到，选择有清晰黑色实线。")
+                services.speech.speak(prompt)
             }
         }
 
@@ -1008,12 +1111,12 @@ struct ResultSheetView: View {
     let leftAxisDeg: Int?
     let rightFocusMM: Double?
     let leftFocusMM: Double?
-
+    
     @Environment(\.dismiss) private var dismiss
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
-
+    
     var body: some View {
         VStack(spacing: 16) {
             ScrollView {
@@ -1029,13 +1132,13 @@ struct ResultSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             }
-
+            
             Button {
                 Task { await saveToAlbum() }
             } label: {
                 Label(isSaving ? "正在保存…" : "保存到相册",
                       systemImage: isSaving ? "hourglass" : "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -1043,7 +1146,7 @@ struct ResultSheetView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
         }
-       // .navigationTitle("验光单")
+        // .navigationTitle("验光单")
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) {
             Button("好", role: .cancel) { }
@@ -1051,12 +1154,12 @@ struct ResultSheetView: View {
             Text(alertMsg)
         }
     }
-
+    
     // MARK: - 保存到相册
     private func saveToAlbum() async {
         isSaving = true
         defer { isSaving = false }
-
+        
         // （这里补上你的相册权限判断和写入逻辑，保持不变）
         // —— 注意渲染时也要传入同样的参数 ——
         let content = ResultSheetContent(
@@ -1067,32 +1170,73 @@ struct ResultSheetView: View {
             rightFocusMM:  rightFocusMM,
             leftFocusMM:   leftFocusMM
         )
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .background(Color.white)
-
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color.white)
+        
         let renderer = ImageRenderer(content: content)
         renderer.scale = UIScreen.main.scale
-
-        #if canImport(UIKit)
+        
+#if canImport(UIKit)
         guard let uiImage = renderer.uiImage else {
             alertMsg = "生成图片失败。"
             showAlert = true
             return
         }
-        #else
-        guard let cgImage = renderer.cgImage else {
-            alertMsg = "生成图片失败。"
+        // —— 请求相册写入权限 ——
+        let currentStatus = PHPhotoLibrary.authorizationStatus()
+        switch currentStatus {
+        case .authorized, .limited:
+            // 已有权限，直接写入
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+            } completionHandler: { success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        alertMsg = "已成功保存到相册"
+                    } else {
+                        alertMsg = "保存失败：\(error?.localizedDescription ?? "未知错误")"
+                    }
+                    showAlert = true
+                }
+            }
+            
+        case .notDetermined:
+            // 首次请求
+            PHPhotoLibrary.requestAuthorization { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        PHPhotoLibrary.shared().performChanges {
+                            PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+                        } completionHandler: { success, error in
+                            DispatchQueue.main.async {
+                                if success {
+                                    alertMsg = "已成功保存到相册"
+                                } else {
+                                    alertMsg = "保存失败：\(error?.localizedDescription ?? "未知错误")"
+                                }
+                                showAlert = true
+                            }
+                        }
+                    } else {
+                        alertMsg = "无法访问相册权限。"
+                        showAlert = true
+                    }
+                }
+            }
+            
+        default:
+            // 已被拒绝或受限
+            alertMsg = "无法访问相册权限。"
             showAlert = true
-            return
         }
-        let uiImage = UIImage(cgImage: cgImage)
-        #endif
-
-        // —— 写入相册并更新 alertMsg/showAlert ——
-        // ...
+#else
+        // macOS 平台或其它情况：直接失败
+        alertMsg = "此平台不支持相册保存。"
+        showAlert = true
+#endif
     }
 }
 
 
-//=================================================
+

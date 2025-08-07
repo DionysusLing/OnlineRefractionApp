@@ -69,7 +69,8 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     @Published var showingE = false
     @Published var curDirection: Dir = .up
     @Published var curLevelIdx = 0
-
+    @Published var isInLearnIntro = false
+    
     // Debug overlay（统一坐标后的 pitch）
     @Published var pitchDeg: Float = 0
     @Published var deltaZ:   Float = 0
@@ -134,24 +135,56 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     // MARK: - Flow
-    func restart() { phase = .learn; right = .init(); left = .init(); preparePractice() }
-    func restartToDistance() { right = .init(); left = .init(); phase = .distance }
+    func restart() {
+        phase = .learn
+        right = .init()
+        left  = .init()
+        // 不要马上 preparePractice()
+    }
+    func restartToDistance() {
+        right = .init()
+        left  = .init()
+        phase = .distance
+    }
 
     // Learn (界面7)
     func onAppearLearn(_ svc: AppServices) {
         services = svc
         startFaceTracking()
-        svc.speech.restartSpeak("先练习八次：看到 E 的方向后用头部动作回答。", delay: 0)
-        preparePractice()
-    }
+        // 1) 进入练习页面立即播放引导语，置入“引导中”状态
+                isInLearnIntro = true
+                showingE       = false
+
+                let intro = """
+                先练习八次：看到意的开口方向后用头部动作回答。\
+                意开口向左，请向左转头；\
+                意开口向右，请向右转头；\
+                意开口向左，请向上抬头；\
+                意开口向下，请向下点头。
+                """
+                svc.speech.restartSpeak(intro, delay: 0)
+
+                // 2) 等候大约 25 秒后，再正式开始练习
+                DispatchQueue.main.asyncAfter(deadline: .now() + 21) { [weak self] in
+                    guard let self = self else { return }
+                    self.isInLearnIntro = false
+                    self.preparePractice()
+                }
+            }
+
+    /// 正式开始 8 次练习题
     private func preparePractice() {
-        practiceQueue = Array(Dir.allCases).shuffled() + Array(Dir.allCases).shuffled()
-        practiceIndex = 0
-        curDirection = practiceQueue[0]
-        practiceText = "练习 1/8"
-        showingE = true
+        practiceQueue  = Array(Dir.allCases).shuffled() + Array(Dir.allCases).shuffled()
+        practiceIndex  = 0
+        curDirection   = practiceQueue[0]
+        practiceText   = "练习 1/8"
+        
+
+        // 3) 进入练习时才显示视标
+        showingE       = true
         startPracticeTrial(after: 1)
     }
+    
     private func startPracticeTrial(after d: TimeInterval) {
         practiceListening = false
         practiceTimeout?.cancel()
@@ -203,6 +236,8 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
+    
+    
     // Distance (界面8)
     func onAppearDistance(_ svc: AppServices) {
         services = svc
@@ -215,7 +250,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let who = eye == .right ? "右眼" : "左眼"
         let side = eye == .right ? "左" : "右"
         let color = theme == .blue ? "蓝色" : "白色"
-        svc.speech.restartSpeak("现在测试\(who)。请闭上\(side)眼，先观看\(color)屏幕 20 秒。", delay: 0)
+        svc.speech.restartSpeak("现在测试\(who)。请闭上\(side)眼，先观看\(color)屏幕 20 秒。测时，看到意的开口方向后用头部动作回答", delay: 0)
 
         showAdaptCountdown = adaptSecs
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { t in
@@ -395,20 +430,37 @@ private struct VALearnPage: View {
     var body: some View {
         ZStack {
             Color.white
-            if vm.showingE {
-                VisualAcuityEView(
-                    orientation: vm.curDirection.toOri,
-                    sizeUnits: 5, barThicknessUnits: 1, gapUnits: 1,
-                    eColor: .black, borderColor: .black, backgroundColor: .clear
-                )
-                .frame(width: 220, height: 220)
-            }
-        }
+            if vm.isInLearnIntro {
+                            // 引导阶段：图例
+                            Image("headmove")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 400, height: 400)
+                        }
+                        else {
+                            // 练习阶段：显示视标
+                            if vm.showingE {
+                                VisualAcuityEView(
+                                    orientation:       vm.curDirection.toOri,
+                                    sizeUnits:         5,
+                                    barThicknessUnits: 1,
+                                    gapUnits:          1,
+                                    eColor:            .black,
+                                    borderColor:       .black,
+                                    backgroundColor:   .clear
+                                )
+                                .frame(width: 220, height: 220)
+                            }
+                        }
+                    }
         .overlay(alignment: .bottomLeading) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(vm.practiceText).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
+                    .font(.system(size: 16, weight: .regular))
                     .font(.caption2).foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.leading, 8).padding(.bottom, 10)
             }
         }
@@ -455,9 +507,12 @@ private struct VATestPage: View {
         }
         .overlay(alignment: .bottomLeading) {
             Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
-                .font(.caption2)
+                .font(.system(size: 24, weight: .regular))
                 .foregroundColor(theme == .blue ? .white.opacity(0.7) : .black.opacity(0.7))
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.leading, 8).padding(.bottom, 10)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
         }
     }
 }
@@ -466,53 +521,128 @@ private struct VAEndPage: View {
     @ObservedObject var vm: VAViewModel
     let onAgain: ()->Void
     let onSubmitTap: ()->Void
+    @State private var showingInfo = false
 
     private var canSubmit: Bool {
-        vm.right.blue != nil && vm.right.white != nil && vm.left.blue != nil && vm.left.white != nil
+        //vm.right.blue != nil && vm.right.white != nil && vm.left.blue != nil && vm.left.white != nil
+        return vm.right.blue != nil && vm.right.white != nil &&
+               vm.left.blue  != nil && vm.left.white  != nil
     }
     private var rightDesc: String {
         let b = vm.right.blue.map  { String(format: "蓝 %.1f", $0) } ?? "—"
         let w = vm.right.white.map { String(format: "白 %.1f", $0) } ?? "—"
-        return "右眼：\(b) / \(w)"
+        return "右眼VA：\(b) / \(w)"
     }
     private var leftDesc: String {
         let b = vm.left.blue.map  { String(format: "蓝 %.1f", $0) } ?? "—"
         let w = vm.left.white.map { String(format: "白 %.1f", $0) } ?? "—"
-        return "左眼：\(b) / \(w)"
+        return "左眼VA：\(b) / \(w)"
     }
 
     var body: some View {
         ZStack {
             Color.white   // 界面11：保持白底
             VStack(spacing: 24) {
-                Text("测试结束").font(.title2.bold())
+                Color.clear
+                    .frame(height: 120)
+                
+                Image("finished")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 72, height: 72)
+                
+                Text("测试完成").font(.system(size: 42))
+                Color.clear
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rightDesc)
                     Text(leftDesc)
                 }
-                .font(.title3)
 
+                Color.clear
+                    .frame(height: 170)
+                
                 Button("再测一次") {
                     onAgain()
                 }
+                .font(.system(size: 22, weight: .semibold))    // 只放大文字
+                .frame(height: 20)                             // 固定高度，不随文字增大
                 .padding().frame(maxWidth: .infinity)
                 .background(Color.blue).foregroundColor(.white).cornerRadius(10)
 
                 Button("提交结果") {
                     onSubmitTap()
                 }
-                .padding(.vertical, 8)
+                .font(.system(size: 22, weight: .semibold))    // 只放大文字
+                .frame(height: 20)
+                .padding()
                 .frame(maxWidth: .infinity)
                 .background(canSubmit ? Color.black : Color.gray.opacity(0.4))
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .disabled(!canSubmit)
-                .padding(.bottom, 36)
+
+
+                // 新增：底部蓝色链接
+                                Text("系统是如何通过视力VA计算屈光不正度数？")
+                                    .font(.footnote)
+                                    .foregroundColor(.blue)
+                                    .onTapGesture { showingInfo = true }
+                                    .padding(.top, 8)
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 36)
+                        }
+                        // 弹出说明 Sheet
+                        .sheet(isPresented: $showingInfo) {
+                            NavigationStack {
+                                ScrollView {
+                                    Text("有待加入正式内容")
+                                        .padding()
+                                }
+                                .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
+                                .navigationBarTitleDisplayMode(.inline)
             }
             .padding(.horizontal, 24)
         }
     }
 }
+
+
+import SwiftUI
+
+// MARK: — 界面11 Canvas（测试结束确认页）
+/// 对应 VAFlow.swift 中的 private struct VAEndPage {...}
+struct VAEndPage_Canvas: View {
+    @ObservedObject var vm: VAViewModel
+    let onAgain:     () -> Void
+    let onSubmitTap: () -> Void
+
+    var body: some View {
+        VAEndPage(vm: vm, onAgain: onAgain, onSubmitTap: onSubmitTap)  // :contentReference[oaicite:0]{index=0}
+    }
+}
+
+#if DEBUG
+struct VAEndPage_Canvas_Previews: PreviewProvider {
+    static var previews: some View {
+        // 构造一个示例 VM，模拟测试已结束且两眼蓝/白值都有结果
+        let vm = VAViewModel()
+        vm.phase = .end
+        vm.right = .init(blue: 0.1, white: 0.2)
+        vm.left  = .init(blue: 0.15, white: 0.25)
+
+        return VAEndPage_Canvas(
+            vm: vm,
+            onAgain:     { /* noop */ },
+            onSubmitTap: { /* noop */ }
+        )
+        .previewLayout(.sizeThatFits)
+        .previewDisplayName("界面11：测试结束确认")
+        .environmentObject(AppServices())
+    }
+}
+#endif
+
 
 // MARK: - Tools
 fileprivate extension simd_float4x4 { var position: SIMD3<Float> { .init(columns.3.x, columns.3.y, columns.3.z) } }
@@ -531,3 +661,4 @@ private extension VAViewModel.Dir {
 private extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
+
