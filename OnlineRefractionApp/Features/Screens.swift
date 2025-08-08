@@ -21,10 +21,16 @@ struct StartupView: View {
 
             VoiceBar()
                 .scaleEffect(0.5)
-
+            
+            Text("本App的发明专利公布号：CN120391991A")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            
             Text("Power by 眼视光仿真超级引擎")
                 .font(.footnote)
                 .foregroundColor(.secondary)
+            Color.clear
+                .frame(height: 10)
         }
         .onAppear {
             // 首次进入显示引导；否则直接走原有流程
@@ -486,7 +492,7 @@ struct ChecklistView: View {
 
         // 返回后的确认
         .confirmationDialog("已关闭“自动亮度”吗？", isPresented: $askConfirm, titleVisibility: .visible) {
-            Button("是的，确认打勾") {
+            Button("已关闭") {
                 items[3] = true
                 // 清理标记
                 needConfirmAutoBrightness = false
@@ -573,10 +579,13 @@ struct PDView: View {
 
                 // 顶部提示（不用 clamped，避免访问级别冲突）
                 let yTop = max(24, min(circleTopOffsetPt - 28, geo.size.height - 24))
-                Text("请与手机保持约 35 厘米，并正视屏幕")
+                Text("若未能正视屏幕或光线不够明亮")
                     .foregroundColor(.white.opacity(0.85))
                     .position(x: geo.size.width / 2, y: yTop - 80)
-
+                Text("将导致误差扩大到毫米级")
+                    .foregroundColor(.white.opacity(0.85))
+                    .position(x: geo.size.width / 2, y: yTop - 50)
+                
                 // 底部：调试信息 + 语音条
                 VStack(spacing: 8) {
                     Spacer()
@@ -756,7 +765,7 @@ struct CYLAxialAView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer(minLength: 120)
-            Image(Asset.cylStar).resizable().scaledToFit().frame(height: 320)
+            Image(Asset.cylStarSmall).resizable().scaledToFit().frame(height: 320)
             Spacer(minLength: 120)
             PrimaryButton(title: "无清晰黑色实线") { answer(false) }
             PrimaryButton(title: "有清晰黑色实线") { answer(true)  }
@@ -764,7 +773,7 @@ struct CYLAxialAView: View {
                 .scaleEffect(0.5)   // 缩小 50%
             Spacer(minLength: 8)
         }
-        .navigationTitle(eye == .right ? "右眼" : "左眼")
+   //   .navigationTitle(eye == .right ? "右眼" : "左眼")
         .navigationBarTitleDisplayMode(.inline)
         .pagePadding()
         .onAppear {
@@ -773,7 +782,7 @@ struct CYLAxialAView: View {
             services.speech.stop()
 
             // 根据当前是右眼还是左眼，选择不同的播报文字
-            let instruction = "如果看不到清晰黑色实线，选择无清晰黑色实线；若看到，选择有清晰黑色实线。"
+            let instruction = "由近推远，慢慢找是否出现虚线的、模糊的散光盘上出现清晰的实线。可以反复由近推远观察。最后在屏幕上报告是否看到有虚线变实线。"
             let prompt = eye == .right
                 ? "请闭上左眼，右眼看散光盘。" + instruction
                 : "请闭上右眼，左眼看散光盘。" + instruction
@@ -820,7 +829,7 @@ struct CYLAxialMoreView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Text(pdSvc.distance_m.map { String(format: "%.1f cm", $0 * 100) } ?? "-- cm")
+                          Text(pdSvc.distance_m.map { String(format: "%.1f cm", $0 * 100) } ?? "-- cm")
                             .font(.caption2)
                             .foregroundColor(.white)
                             .padding(6)
@@ -859,7 +868,7 @@ struct CYLAxialMoreView: View {
                 .scaleEffect(0.5)
             Spacer(minLength: 8)
         }
-        .navigationTitle(eye == .right ? "右眼" : "左眼")
+   //   .navigationTitle(eye == .right ? "右眼" : "左眼")
         .navigationBarTitleDisplayMode(.inline)
         .pagePadding()
         .onAppear {
@@ -871,7 +880,7 @@ struct CYLAxialMoreView: View {
             didSpeak = true
             services.speech.stop()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak("请点击散光盘上与清晰黑色实线方向最靠近的数字，并保持相机距离稳定。")
+                services.speech.speak("请点击散光盘上与清晰黑色实线方向最靠近的数字。")
             }
         }
     }
@@ -894,7 +903,7 @@ struct CYLAxialMoreView: View {
 
         // 播报并跳转
         services.speech.stop()
-        services.speech.speak("已记录，轴向 \(axis) 度，距离 \(String(format: "%.0f", clarityMM)) 毫米。")
+        services.speech.speak("已记录。")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             state.path.append(eye == .right ? .cylR_D : .cylL_D)
         }
@@ -927,7 +936,7 @@ struct CYLDistanceView: View {
             Spacer(minLength: 8)
         }
         .pagePadding()
-        .navigationTitle(eye == .right ? "右眼" : "左眼")
+ //     .navigationTitle(eye == .right ? "右眼" : "左眼")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             svc.start()
@@ -935,7 +944,7 @@ struct CYLDistanceView: View {
             didSpeak = true
             services.speech.stop()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak("请前后微调与屏幕的距离，当实线最清晰时点击按钮。")
+                services.speech.speak("请前后微调与屏幕的距离，当实线最清晰时点击屏幕上的按钮。")
             }
         }
 
@@ -944,7 +953,7 @@ struct CYLDistanceView: View {
     private func lockAndNext() {
         let mm = (svc.distance_m ?? 0) * 1000.0
         services.speech.stop()
-        services.speech.speak("已记录最清晰距离。")
+        services.speech.speak("已记录。")
         if eye == .right {
             state.cylR_clarityDist_mm = mm
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {

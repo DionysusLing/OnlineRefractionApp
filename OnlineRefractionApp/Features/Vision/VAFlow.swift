@@ -476,7 +476,7 @@ private struct VADistancePage: View {
                 Text(String(format: "%.0f mm", vm.distanceMM))
                     .font(.system(size: 72, weight: .bold))
                     .foregroundColor(vm.distanceInWindow ? .green : .white)
-                Text("目标 1192–1205 mm").foregroundColor(.secondary)
+                Text("目标 1198–1202 mm").foregroundColor(.secondary)
             }
         }
     }
@@ -621,27 +621,6 @@ struct VAEndPage_Canvas: View {
         VAEndPage(vm: vm, onAgain: onAgain, onSubmitTap: onSubmitTap)  // :contentReference[oaicite:0]{index=0}
     }
 }
-
-#if DEBUG
-struct VAEndPage_Canvas_Previews: PreviewProvider {
-    static var previews: some View {
-        // 构造一个示例 VM，模拟测试已结束且两眼蓝/白值都有结果
-        let vm = VAViewModel()
-        vm.phase = .end
-        vm.right = .init(blue: 0.1, white: 0.2)
-        vm.left  = .init(blue: 0.15, white: 0.25)
-
-        return VAEndPage_Canvas(
-            vm: vm,
-            onAgain:     { /* noop */ },
-            onSubmitTap: { /* noop */ }
-        )
-        .previewLayout(.sizeThatFits)
-        .previewDisplayName("界面11：测试结束确认")
-        .environmentObject(AppServices())
-    }
-}
-#endif
 
 
 // MARK: - Tools
