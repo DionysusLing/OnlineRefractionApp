@@ -31,7 +31,5 @@ enum Asset {
     static let icoSunEye       = "icoSunEye"
     static let icoSports       = "icoSports"
     static let icoEye          = "icoEye"
-    static let cylStar         = "cylStar"
-    static let cylStarSmall    = "cylStarSmall"
     static let voice           = "voice"   // 请确保 Image Set 叫“voice”
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Photos
 
 // MARK: - 1. StartUp（含首次启动引导）
 struct StartupView: View {
@@ -232,16 +233,10 @@ struct TypeCodeView: View {
         """
     
     private var canProceed: Bool {
-        guard agreed else { return false }               // 协议未同意则不行
+        guard agreed, ageOK, myopiaOnly else { return false }
         let trimmed = code.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-                // 普通流程：只要年龄和近视都确认了就可以进
-                return ageOK && myopiaOnly
-            } else {
-                // 开发码流程：非空时只允许完全等于 "0000"
-                return trimmed == "0000"
-            }
-        }
+        return trimmed == "0000" && trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil
+    }// 必须勾选所有选项并输入合法的 "0000" 才能进入下一步
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -426,6 +421,7 @@ struct ChecklistView: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            Color.clear.frame(height: 40)
             ForEach(0..<titles.count, id: \.self) { i in
                 ChecklistRow(
                     icon: icons[i],
@@ -534,6 +530,9 @@ private struct ChecklistRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
+
+
+
 
 
 // MARK: - 4. PD 1/2/3（仅第一次播报；无“完成”播报）
@@ -754,128 +753,240 @@ struct CYLAxialView: View {
     }
 }
 
-// MARK: - 5A：是否有清晰黑色实线（两按钮）
+
+
+
+
+/// MARK: - 5A：散光盘指引（阶段1）→ 判断（阶段2，先1键后3键）
 struct CYLAxialAView: View {
+    enum Phase { case guide, decide }
+
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
+    @State private var phase: Phase = .guide
     @State private var didSpeak = false
+    @State private var canContinue = false        // 阶段1：TTS 未完禁用
+    @State private var showChoices = false        // 阶段2：是否展开三按钮
 
+    private var guideButtonTitle: String {
+        eye == .right ? "明白了。开始闭左眼测右眼" : "开始闭右眼测左眼"
+    }
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer(minLength: 120)
-            Image(Asset.cylStarSmall).resizable().scaledToFit().frame(height: 320)
-            Spacer(minLength: 120)
-            PrimaryButton(title: "无清晰黑色实线") { answer(false) }
-            PrimaryButton(title: "有清晰黑色实线") { answer(true)  }
-            VoiceBar()
-                .scaleEffect(0.5)   // 缩小 50%
-            Spacer(minLength: 8)
-        }
-   //   .navigationTitle(eye == .right ? "右眼" : "左眼")
-        .navigationBarTitleDisplayMode(.inline)
-        .pagePadding()
-        .onAppear {
-            guard !didSpeak else { return }
-            didSpeak = true
-            services.speech.stop()
 
-            // 根据当前是右眼还是左眼，选择不同的播报文字
-            let instruction = "由近推远，慢慢找是否出现虚线的、模糊的散光盘上出现清晰的实线。可以反复由近推远观察。最后在屏幕上报告是否看到有虚线变实线。"
-            let prompt = eye == .right
-                ? "请闭上左眼，右眼看散光盘。" + instruction
-                : "请闭上右眼，左眼看散光盘。" + instruction
+        GeometryReader { g in
+            ZStack {
+                // —— 居中主图：不随底部按钮区域改变 —— //
+                Group {
+                    if phase == .guide {
+                        Image("cylguide")
+                            .resizable().scaledToFit()
+                            .frame(width: min(g.size.width * 0.80, 360))
+                            .offset(y: -60)
+                    } else {
+                        CylStarVector(         // 矢量散光盘
+                            spokes: 24,
+                            innerRadiusRatio: 0.23,
+                            dashLength: 10,
+                            gapLength: 7,
+                            lineWidth: 3,
+                            color: .black,
+                            holeFill: .white
+                        )
+                        .offset(y: -60)
+                        CylStarVector(color: .black, lineCap: .butt)
+                            .frame(width: 320, height: 320)
+                            .offset(y: -40)
+                            
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .offset(y: (phase == .decide && showChoices) ? -140 : 0)      // ← 展开三按钮时上移 140px
+                .animation(.easeInOut(duration: 0.25), value: showChoices)     // ← 平滑过渡
+                .background(Color.white.ignoresSafeArea())
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak(prompt)
+                // —— 底部操作区：永远贴着底边 —— //
+                VStack(spacing: 16) {
+                    if phase == .guide {
+                        PrimaryButton(title: guideButtonTitle) {
+                            phase = .decide
+                            showChoices = false
+                            speakEyePrompt()        // ✅ 左右眼都播对应提示
+                        }
+                        .disabled(!canContinue)      // 右眼：需等待；左眼：runGuideSpeechAndGate() 会直接放开
+                        .opacity(canContinue ? 1.0 : 0.4)
+                    } else {
+                        if !showChoices {
+                            PrimaryButton(title: "报告观察结果") {
+                                showChoices = true
+                                services.speech.restartSpeak("请在下方选择：无、疑似有、或有清晰黑色实线。")
+                            }
+                        } else {
+                            PrimaryButton(title: "无清晰黑色实线") { answer(false) }
+                            PrimaryButton(title: "疑似有清晰黑色实线") { answerMaybe() }
+                            PrimaryButton(title: "有清晰黑色实线") { answer(true)  }
+                        }
+                    }
+                    VoiceBar().scaleEffect(0.5)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 2) // 需要更贴底就调小/更抬高就调大
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom) // ✅ 关键：对齐到底部
+
+                        }
+                        .frame(width: g.size.width, height: g.size.height)
+                        .ignoresSafeArea(edges: .bottom)
+                    }
+                    .navigationBarTitleDisplayMode(.inline)
+                    .onAppear {
+                        guard !didSpeak else { return }
+                        didSpeak = true
+                        runGuideSpeechAndGate()
+                    }
+                    .onChange(of: phase) { newPhase in
+                        if newPhase == .guide { runGuideSpeechAndGate() }
+                    }
+                }
+
+    // 阶段1：只播“由近推远…”并设置最小时限
+    private func runGuideSpeechAndGate() {
+        services.speech.stop()
+        if eye == .right {
+            // 右眼：播引导 + 最小时限
+            let instruction = "本环节测散光。屏幕中间会有一个放射状散光盘。需要你在手持距离内，慢慢的、反复的，将手机由近推远，由远拉近，观察散光盘的虚线是否会连成一条黑色的实线。最后报告观察结果。"
+            services.speech.restartSpeak(instruction, delay: 0.35)
+
+            canContinue = false
+            let estimated: TimeInterval = 20   // 你的实测时长，可继续微调
+            DispatchQueue.main.asyncAfter(deadline: .now() + estimated) {
+                canContinue = true
             }
+        } else {
+            // 左眼：不播语音、不限时，按钮直接可点
+            canContinue = true
         }
-
     }
 
+    // 阶段2进入：播“闭眼提示”
+    private func speakEyePrompt() {
+        services.speech.stop()
+        let prompt = (eye == .right)
+            ? "请闭上左眼，右眼看散光盘。慢慢移动手机、慢慢观察"
+            : "请闭上右眼，左眼看散光盘。慢慢移动手机、慢慢观察"
+        services.speech.restartSpeak(prompt, delay: 0.15)
+    }
+
+    // MARK: - 判定逻辑
     private func answer(_ has: Bool) {
         if eye == .right { state.cylR_has = has } else { state.cylL_has = has }
         if has {
-            state.path.append(eye == .right ? .cylR_B : .cylL_B)
+            state.path.append(eye == .right ? .cylR_B : .cylL_B) // 去 5B（轴向）→ 6（焦距）
         } else {
             if eye == .right { state.path.append(.cylL_A) }
-            else            { state.path.append(.vaLearn) }
+            else             { state.path.append(.vaLearn) }
         }
+    }
+
+    // “疑似”也按“有清晰”走，且记录疑似标记
+    private func answerMaybe() {
+        if eye == .right { state.cylR_suspect = true } else { state.cylL_suspect = true }
+        answer(true)
     }
 }
 
-// MARK: - 5B：点击外圈数字得轴向（同时记录清晰距离）
+
+
+// MARK: - 5B：点击外圈数字得轴向
+
 struct CYLAxialMoreView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
-    // —— 新增：用来测量距离
-    @StateObject private var pdSvc = FacePDService()
     @State private var didSpeak = false
+    @State private var selectedMark: Double? = nil   // 1…12 或 0.5、1.5、…、11.5
 
     var body: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 138)
-            ZStack {
-                Image(Asset.cylStar)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 320)
 
-                // —— 新增：在画面右下角显示当前测到的距离，方便用户确认 ——
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                          Text(pdSvc.distance_m.map { String(format: "%.1f cm", $0 * 100) } ?? "-- cm")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .padding(6)
-                            .background(Color.black.opacity(0.5))
-                            .cornerRadius(6)
-                            .padding()
-                    }
-                }
+            ZStack {
+                CylStarVector()
+                    .frame(height: 280)
 
                 GeometryReader { geo in
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { g in
-                                    let p      = g.location
-                                    let center = CGPoint(x: geo.size.width/2, y: geo.size.height/2)
-                                    let dx     = Double(p.x - center.x)
-                                    let dy     = Double(center.y - p.y)
-                                    var ang    = atan2(dy, dx)          // [-π, π]
-                                    if ang < 0 { ang += 2 * .pi }
-                                    let sector = Int(round(ang / (.pi/6))) % 12
-                                    let clock  = (sector == 0 ? 12 : sector)
-                                    onPick(clock)
-                                }
-                        )
+                    let size      = geo.size
+                    let r         = min(size.width, size.height) * 0.44
+                    let cx        = size.width * 0.5
+                    let cy        = size.height * 0.5
+                    let bigFont   = size.width * 0.085
+                    let smallFont = bigFont * 0.5
+                    let hitBig:  CGFloat = 44
+                    let hitHalf: CGFloat = 34
+
+                    // —— 半刻度（0.5、1.5、…、11.5） —— //
+                    ForEach(Array(stride(from: 0.5, through: 11.5, by: 1.0)), id: \.self) { v in
+                        let angle = (3.0 - v) * .pi / 6.0
+                        let x = cx + CGFloat(cos(angle)) * r
+                        let y = cy - CGFloat(sin(angle)) * r
+
+                        Text(String(format: "%.1f", v))
+                            .font(.system(size: smallFont, weight: .semibold))
+                            .foregroundColor(isHighlighted(v) ? .green : .primary) // ✅ 对向同步高亮
+                            .frame(width: hitHalf, height: hitHalf, alignment: .center)
+                            .contentShape(Circle())
+                            .position(x: x, y: y)
+                            .onTapGesture { selectMark(v) }
+                    }
+
+                    // —— 整点（1…12） —— //
+                    ForEach(1...12, id: \.self) { clock in
+                        let v = Double(clock)
+                        let angle = (3.0 - v) * .pi / 6.0
+                        let x = cx + CGFloat(cos(angle)) * r
+                        let y = cy - CGFloat(sin(angle)) * r
+
+                        Text("\(clock)")
+                            .font(.system(size: bigFont, weight: .semibold))
+                            .foregroundColor(isHighlighted(v) ? .green : .primary) // ✅ 对向同步高亮
+                            .frame(width: hitBig, height: hitBig, alignment: .center)
+                            .contentShape(Circle())
+                            .position(x: x, y: y)
+                            .onTapGesture { selectMark(v) }
+                    }
                 }
             }
             .frame(height: 360)
 
-            Spacer(minLength: 20)
-            Text("请点击与清晰黑色实线方向最靠近的数字")
-                .foregroundColor(.gray)
+            // —— 底部大号回显：显示 a—b —— //
+            ZStack {
+                if let v = selectedMark {
+                    GeometryReader { gg in
+                        let bigSize = min(gg.size.width, 360) * 0.16
+                        let pair = "\(displayString(v))—\(displayString(opposite(of: v)))"
+                        Text(pair)
+                            .font(.system(size: bigSize, weight: .heavy))
+                            .foregroundColor(.green)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .transition(.opacity.combined(with: .scale))
+                    }
+                }
+            }
+            .frame(height: 80)
+            .animation(.easeInOut(duration: 0.18), value: selectedMark)
+
+            Text(selectedMark == nil ? "请点击与清晰黑色实线方向最靠近的数字" : "已记录")
+                .foregroundColor(selectedMark == nil ? .gray : .gray)
+                .animation(.easeInOut(duration: 0.15), value: selectedMark)
+
             Spacer(minLength: 120)
-            VoiceBar()
-                .scaleEffect(0.5)
+            VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 8)
         }
-   //   .navigationTitle(eye == .right ? "右眼" : "左眼")
         .navigationBarTitleDisplayMode(.inline)
         .pagePadding()
         .onAppear {
-            // 启动 face tracking 服务
-            pdSvc.start()
-
-            // 语音播报
             guard !didSpeak else { return }
             didSpeak = true
             services.speech.stop()
@@ -885,23 +996,49 @@ struct CYLAxialMoreView: View {
         }
     }
 
+    // MARK: - 交互与显示
+    private func selectMark(_ v: Double) {
+        selectedMark = v
+        withAnimation(.easeOut(duration: 0.18)) {}
+
+        // 业务逻辑保持：四舍五入到最近整点进行轴向计算
+        let rounded = (v == 12.0) ? 12 : Int(round(v))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            onPick(rounded)
+        }
+    }
+
+    /// 当前是否需要高亮（本值 + 对向值）
+    private func isHighlighted(_ value: Double) -> Bool {
+        guard let s = selectedMark else { return false }
+        let o = opposite(of: s)
+        return abs(value - s) < 0.0001 || abs(value - o) < 0.0001
+    }
+
+    /// 计算对向值：+6 超过 12 则 -12
+    private func opposite(of v: Double) -> Double {
+        let o = v + 6.0
+        return o > 12.0 ? (o - 12.0) : o
+    }
+
+    private func displayString(_ v: Double) -> String {
+        v.truncatingRemainder(dividingBy: 1) == 0
+        ? String(Int(v))
+        : String(format: "%.1f", v)
+    }
+
+    // MARK: - 原有逻辑：记录轴向并跳转
     private func onPick(_ clock: Int) {
-        // 计算轴向
         let axis = (clock == 12 ? 180 : clock * 15)
 
-        // 读取当前测的距离（单位 m），转成 mm
-        let clarityMM = (pdSvc.distance_m ?? 0) * 1000
-
-        // 写入全局状态
         if eye == .right {
-            state.cylR_axisDeg         = axis
-            state.cylR_clarityDist_mm  = clarityMM
+            state.cylR_axisDeg = axis
+            state.cylR_clarityDist_mm = nil
         } else {
-            state.cylL_axisDeg         = axis
-            state.cylL_clarityDist_mm  = clarityMM
+            state.cylL_axisDeg = axis
+            state.cylL_clarityDist_mm = nil
         }
 
-        // 播报并跳转
         services.speech.stop()
         services.speech.speak("已记录。")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
@@ -911,7 +1048,10 @@ struct CYLAxialMoreView: View {
 }
 
 
-// MARK: - 6：锁定“最清晰距离”（无数字图：cylStarSmaill）
+
+
+// MARK: - 6：锁定“最清晰距离”
+
 struct CYLDistanceView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
@@ -923,8 +1063,8 @@ struct CYLDistanceView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer(minLength: 120)
-            Image(Asset.cylStarSmall).resizable().scaledToFit().frame(height: 320)
-                .scaleEffect(0.92)   // 缩小 92%
+            CylStarVector(color: .black, lineCap: .butt)
+                .frame(width: 320, height: 320)
             Spacer(minLength: 80)
             Text("实时距离  \(fmtMM(svc.distance_m))")
                 .foregroundColor(.secondary)
@@ -944,7 +1084,7 @@ struct CYLDistanceView: View {
             didSpeak = true
             services.speech.stop()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak("请前后微调与屏幕的距离，当实线最清晰时点击屏幕上的按钮。")
+                services.speech.speak("本步骤是要记录当您这只眼看到黑色实线相对最清晰时，眼睛和屏幕的距离。前后微调屏幕距离，当实线最清晰时，手机和头部都保持不动，点击屏幕上的按钮。")
             }
         }
 
@@ -1249,3 +1389,4 @@ struct ResultSheetView: View {
 
 
 
+//================

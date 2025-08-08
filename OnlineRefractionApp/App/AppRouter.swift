@@ -1,5 +1,18 @@
 import SwiftUI
 
+private struct HideNavBarModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+private extension View {
+    @inline(__always)
+    func noBackBar() -> some View { modifier(HideNavBarModifier()) }
+}
+
 // 路由状态（全局）
 final class AppState: ObservableObject {
     @Published var path: [Route] = []
@@ -20,6 +33,8 @@ final class AppState: ObservableObject {
     @Published var cylL_axisDeg: Int? = nil
     @Published var cylR_clarityDist_mm: Double? = nil
     @Published var cylL_clarityDist_mm: Double? = nil
+    @Published var cylR_suspect: Bool? = nil
+    @Published var cylL_suspect: Bool? = nil
 
     // —— VAFlow 的 4 个视力结果
     @Published var lastOutcome: VAFlowOutcome? = nil
@@ -43,58 +58,70 @@ enum Route: Hashable {
 struct AppRouter: View {
     @EnvironmentObject var services: AppServices
     @StateObject private var state = AppState()
-
+    
     var body: some View {
         NavigationStack(path: $state.path) {
             StartupView()
+                .noBackBar()
                 .navigationDestination(for: Route.self) { route in
                     switch route {
-                    case .startup: StartupView()
-                    case .typeCode: TypeCodeView()
-                    case .checklist: ChecklistView()
-
-                    // PD
-                    case .pd1: PDView(index: 1)
-                    case .pd2: PDView(index: 2)
-                    case .pd3: PDView(index: 3)
-
-                    // CYL
-                    case .cylR_A: CYLAxialView(eye: .right, step: .A)
-                    case .cylR_B: CYLAxialView(eye: .right, step: .B)
-                    case .cylR_D: CYLDistanceView(eye: .right)
-
-                    case .cylL_A: CYLAxialView(eye: .left,  step: .A)
-                    case .cylL_B: CYLAxialView(eye: .left,  step: .B)
-                    case .cylL_D: CYLDistanceView(eye: .left)
-
-                    // VA —— 统一入口：内部自处理练习/测距/测试/结束
+                    case .startup:
+                        StartupView().noBackBar()
+                    case .typeCode:
+                        TypeCodeView().noBackBar()
+                    case .checklist:
+                        ChecklistView().noBackBar()
+                        
+                        // --- PD ---
+                    case .pd1:
+                        PDView(index: 1).noBackBar()
+                    case .pd2:
+                        PDView(index: 2).noBackBar()
+                    case .pd3:
+                        PDView(index: 3).noBackBar()
+                        
+                        // --- CYL: 右眼 ---
+                    case .cylR_A:
+                        CYLAxialView(eye: .right, step: .A).noBackBar()
+                    case .cylR_B:
+                        CYLAxialView(eye: .right, step: .B).noBackBar()
+                    case .cylR_D:
+                        CYLDistanceView(eye: .right).noBackBar()
+                        
+                        // --- CYL: 左眼 ---
+                    case .cylL_A:
+                        CYLAxialView(eye: .left, step: .A).noBackBar()
+                    case .cylL_B:
+                        CYLAxialView(eye: .left, step: .B).noBackBar()
+                    case .cylL_D:
+                        CYLDistanceView(eye: .left).noBackBar()
+                        
+                        // --- VA ---
                     case .vaLearn:
                         VAFlowView(onFinish: { outcome in
-                            state.lastOutcome = outcome          // 先把结果存起来
-                            state.path.append(.result)           // 再跳转到结果页
-                        })
+                            state.lastOutcome = outcome
+                            state.path.append(.result)
+                        }).noBackBar()
                         
+                        // --- 结果页 ---
                     case .result:
-                        // 1. 取出瞳距平均值
-                        let pdAvg = [state.pd1_mm, state.pd2_mm, state.pd3_mm]
-                            .compactMap { $0 }
-                        let pdText = pdAvg.isEmpty
-                            ? nil
-                            : String(format: "%.1f mm", pdAvg.reduce(0,+)/Double(pdAvg.count))
-
-                        // 2. 跳转并传入所有参数
+                        let pdAvg = [state.pd1_mm, state.pd2_mm, state.pd3_mm].compactMap { $0 }
+                        let pdText = pdAvg.isEmpty ? nil
+                        : String(format: "%.1f mm", pdAvg.reduce(0,+)/Double(pdAvg.count))
+                        
                         ResultSheetView(
                             outcome: state.lastOutcome
-                                ?? VAFlowOutcome(rightBlue: nil, rightWhite: nil, leftBlue: nil, leftWhite: nil),
-                            pdText:       pdText,
+                            ?? VAFlowOutcome(rightBlue: nil, rightWhite: nil, leftBlue: nil, leftWhite: nil),
+                            pdText: pdText,
                             rightAxisDeg: state.cylR_axisDeg,
                             leftAxisDeg:  state.cylL_axisDeg,
                             rightFocusMM: state.cylR_clarityDist_mm,
                             leftFocusMM:  state.cylL_clarityDist_mm
-                        )
-                        }
+                        ).noBackBar()
                     }
+                }
         }
-        .environmentObject(state) // 把 AppState 注入整棵树
+        .noBackBar()                 // 隐藏系统返回
+        .environmentObject(state)    // ✅ 把 AppState 注入整棵树
     }
 }

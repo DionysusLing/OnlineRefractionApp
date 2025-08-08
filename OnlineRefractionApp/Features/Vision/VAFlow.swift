@@ -18,51 +18,78 @@ public struct VAFlowOutcome {
 // MARK: - Entry
 public struct VAFlowView: View {
     @EnvironmentObject private var services: AppServices
-    @StateObject private var vm = VAViewModel()
-    var onFinish: ((VAFlowOutcome) -> Void)?
+    @StateObject private var vm: VAViewModel
 
-    public init(onFinish: ((VAFlowOutcome) -> Void)? = nil) { self.onFinish = onFinish }
+    public var onFinish: ((VAFlowOutcome) -> Void)?
+    private let startAtDistance: Bool
+
+    // ✅ 只保留这一个 init；用闭包初始化 StateObject，
+    //    如果需要从距离开始，就把 phase 先设成 .distance
+    public init(startAtDistance: Bool = false,
+                onFinish: ((VAFlowOutcome) -> Void)? = nil) {
+        self.startAtDistance = startAtDistance
+        self.onFinish = onFinish
+        _vm = StateObject(wrappedValue: {
+            let m = VAViewModel()
+            if startAtDistance { m.phase = .distance }
+            return m
+        }())
+    }
 
     public var body: some View {
         ZStack {
             switch vm.phase {
             case .learn:
-                VALearnPage(vm: vm).onAppear { vm.onAppearLearn(self.services) }
+                VALearnPage(vm: vm)
+                    .onAppear { vm.onAppearLearn(services) }
+
             case .distance:
-                VADistancePage(vm: vm).onAppear { vm.onAppearDistance(self.services) }
+                VADistancePage(vm: vm)
+                    .onAppear { vm.onAppearDistance(services) }
+
             case .blueRight:
                 VATestPage(vm: vm, theme: .blue, eye: .right)
-                    .onAppear { vm.onAppearTest(self.services, theme: .blue, eye: .right) }
+                    .onAppear { vm.onAppearTest(services, theme: .blue, eye: .right) }
+
             case .blueLeft:
                 VATestPage(vm: vm, theme: .blue, eye: .left)
-                    .onAppear { vm.onAppearTest(self.services, theme: .blue, eye: .left) }
+                    .onAppear { vm.onAppearTest(services, theme: .blue, eye: .left) }
+
             case .whiteRight:
                 VATestPage(vm: vm, theme: .white, eye: .right)
-                    .onAppear { vm.onAppearTest(self.services, theme: .white, eye: .right) }
+                    .onAppear { vm.onAppearTest(services, theme: .white, eye: .right) }
+
             case .whiteLeft:
                 VATestPage(vm: vm, theme: .white, eye: .left)
-                    .onAppear { vm.onAppearTest(self.services, theme: .white, eye: .left) }
+                    .onAppear { vm.onAppearTest(services, theme: .white, eye: .left) }
+
             case .end:
-                VAEndPage(vm: vm,
-                          onAgain: { vm.restartToDistance() }, // 回到测距（界面8）
-                          onSubmitTap: { onFinish?(vm.outcome) })
+                VAEndPage(
+                    vm: vm,
+                    onAgain: { vm.restartToDistance() },
+                    onSubmitTap: { onFinish?(vm.outcome) }
+                )
             }
         }
         .ignoresSafeArea()
-        
+        // ❌ 不要再在这里 if startAtDistance { vm.restartToDistance() }，
+        //    因为我们已经在 StateObject 的构造时把 phase 设好了
     }
 }
 
+
+
 // MARK: - ViewModel
 final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
-
+    
     enum Phase { case learn, distance, blueRight, blueLeft, whiteRight, whiteLeft, end }
     enum Theme { case blue, white }
     enum Eye   { case right, left }
     enum Dir: CaseIterable { case up, down, left, right }
-
+    
     // UI
     @Published var phase: Phase = .learn
+    
     @Published var distanceMM: CGFloat = 0
     @Published var distanceInWindow = false
     @Published var showAdaptCountdown = 0
@@ -75,41 +102,75 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     @Published var pitchDeg: Float = 0
     @Published var deltaZ:   Float = 0
     @Published var practiceText = ""
-
+    
     // Services / AR
     private weak var services: AppServices?
     private let session = ARSession()
-
+    
     // Timing
     private let adaptSecs = 20
     private let listenSecs: TimeInterval = 3.0
     private let speechOK  : TimeInterval = 1.0
     private let speechNone: TimeInterval = 3.0
-
+    
     // 阈值（练习与正式使用各自一套，同向）
     private let upPitchPractice:   Float = 20     // 练习：pitch ≥ +20° ⇒ 上
     private let downPitchPractice: Float = -20    // 练习：pitch ≤ −20° ⇒ 下
     private let upPitchTest:       Float = 20     // 正式：pitch ≥ +20° ⇒ 上
     private let downPitchTest:     Float = -20    // 正式：pitch ≤ −20° ⇒ 下
-
+    
     // 左右阈值（两者通用）
     private let dzRightThresh:     Float = 0.025  // Δz ≥ +0.025 ⇒ 右
     private let dzLeftThresh:      Float = -0.025 // Δz ≤ −0.025 ⇒ 左
-
+    
     // Distance gate (1.2 m)
     private let minMM: CGFloat = 1192
     private let maxMM: CGFloat = 1205
+    // 距离提示（界面8）——全局节流 + 迟滞
+    private enum DistanceZone { case near, ok, far }
+    private let hintCooldown: TimeInterval = 3.0   // 最小播报间隔
+    private let zoneHysteresis: CGFloat = 10       // 迟滞（mm），防抖动跨阈值
+    private var lastSpokenAt: Date = .distantPast  // 上一次播报时间
+    private var lastSpokenZone: DistanceZone? = nil
 
+    
     // 视标等级
     private struct Level { let logMAR: Double; let sizePt: CGFloat }
     private var levels: [Level] = []
     var sizePtCurrent: CGFloat { levels[safe: curLevelIdx]?.sizePt ?? 120 }
-
+    
     // 练习 bookkeeping
     private var practiceQueue: [Dir] = []
     private var practiceIndex = 0
     private var practiceListening = false
     private var practiceTimeout: DispatchWorkItem?
+    private var practiceWork: DispatchWorkItem?
+    private func maybeSpeakDistanceHint(_ dMM: CGFloat) {
+        guard phase == .distance else { return }
+
+        // 含迟滞的阈值
+        let nearTh = minMM - zoneHysteresis
+        let farTh  = maxMM + zoneHysteresis
+
+        let zone: DistanceZone = (dMM < nearTh) ? .near :
+                                 (dMM > farTh)  ? .far  : .ok
+
+        // 在“合适”区不打扰
+        guard zone != .ok else { return }
+
+        let now = Date()
+
+        // 全局节流：不论区间是否变化，都至少间隔 hintCooldown 才能再说
+        if now.timeIntervalSince(lastSpokenAt) < hintCooldown { return }
+
+        // 通过再播
+        lastSpokenAt  = now
+        lastSpokenZone = zone
+
+        let text = (zone == .near) ? "距离不足，请移远一些。" : "距离过大，请靠近一些。"
+        services?.speech.restartSpeak(text, delay: 0)
+    }
+
 
     // 正式测试 bookkeeping
     private var awaitingAnswer = false
@@ -148,91 +209,93 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     // Learn (界面7)
+
     func onAppearLearn(_ svc: AppServices) {
         services = svc
         startFaceTracking()
-        // 1) 进入练习页面立即播放引导语，置入“引导中”状态
-                isInLearnIntro = true
-                showingE       = false
+        // 引导阶段
+        isInLearnIntro = true
+        showingE       = false
 
-                let intro = """
-                先练习八次：看到意的开口方向后用头部动作回答。\
-                意开口向左，请向左转头；\
-                意开口向右，请向右转头；\
-                意开口向左，请向上抬头；\
-                意开口向下，请向下点头。
-                """
-                svc.speech.restartSpeak(intro, delay: 0)
+        // ✅ 改为 4 次，顺序固定：左→右→上→下
+        let intro = """
+        先练习四次：按顺序 左、右、上、下。看到意的开口方向后，以往相应方向的头部动作回答。注意手机要与头部同高。
 
-                // 2) 等候大约 25 秒后，再正式开始练习
-                DispatchQueue.main.asyncAfter(deadline: .now() + 21) { [weak self] in
-                    guard let self = self else { return }
-                    self.isInLearnIntro = false
-                    self.preparePractice()
-                }
-            }
+        """
+        svc.speech.restartSpeak(intro, delay: 0)
 
-    /// 正式开始 8 次练习题
+        // 仍保留原有的引导等待，再进入练习
+        DispatchQueue.main.asyncAfter(deadline: .now() + 16) { [weak self] in
+            guard let self = self else { return }
+            self.isInLearnIntro = false
+            self.preparePractice()
+        }
+    }
+
+    // ✅ 固定 4 题：左→右→上→下
     private func preparePractice() {
-        practiceQueue  = Array(Dir.allCases).shuffled() + Array(Dir.allCases).shuffled()
+        practiceQueue  = [.left, .right, .up, .down]
         practiceIndex  = 0
         curDirection   = practiceQueue[0]
-        practiceText   = "练习 1/8"
-        
+        practiceText   = "练习 1/4"
 
-        // 3) 进入练习时才显示视标
-        showingE       = true
-        startPracticeTrial(after: 1)
+        showingE = true
+        startPracticeTrial(after: 0.8)
     }
-    
+
     private func startPracticeTrial(after d: TimeInterval) {
         practiceListening = false
         practiceTimeout?.cancel()
-        DispatchQueue.main.asyncAfter(deadline: .now() + d) {
+
+        // 取消上一次的延时任务
+        practiceWork?.cancel()
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            // ✅ 只在练习阶段才执行，避免切到距离后还会播
+            guard self.phase == .learn else { return }
             self.resetHits()
+            self.speakCurrentPrompt()     // 本题提示：“本题开口向×…”
             self.practiceListening = true
-            self.schedulePracticeTimeout()
         }
+        practiceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + d, execute: work)
     }
-    private func schedulePracticeTimeout() {
-        practiceTimeout?.cancel()
-        practiceTimeout = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.practiceListening = false
 
-            // 到时也评判（正确/错误/未侦测）
-            let anyHit = self.hitUp || self.hitDown || self.hitLeft || self.hitRight
-            let hitTarget = self.isTargetHit(self.curDirection)
 
-            let speech: String
-            let dur: TimeInterval
-            if !anyHit {
-                speech = "未侦测到头部动作"; dur = self.speechNone
-            } else if hitTarget {
-                speech = "正确"; dur = self.speechOK
-            } else {
-                speech = "错误"; dur = self.speechOK
-            }
-
-            self.services?.speech.restartSpeak(speech, delay: 0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + dur) {
-                self.nextPractice()
-            }
+    private func speakCurrentPrompt() {
+        guard phase == .learn else { return }  // ✅ 非练习阶段直接忽略
+        let prompt: String
+        switch curDirection {
+        case .left:  prompt = "意开口向左，请向左转头。"
+        case .right: prompt = "意开口向右，请向右转头。"
+        case .up:    prompt = "意开口向上，请向上抬头。"
+        case .down:  prompt = "意开口向下，请向下点头。"
+        @unknown default: prompt = ""
         }
-        if let w = practiceTimeout {
-            DispatchQueue.main.asyncAfter(deadline: .now() + listenSecs, execute: w)
-        }
+        guard !prompt.isEmpty else { return }
+        services?.speech.stop()
+        services?.speech.restartSpeak(prompt, delay: 0.15)
     }
+
+    
+    // ✅ 命中后进入下一题；4 题完成后进下一阶段
     private func nextPractice() {
         practiceIndex += 1
         if practiceIndex >= practiceQueue.count {
+            // ✅ 结束练习：收麦 + 取消延时 + 停播
+            practiceListening = false
+            practiceTimeout?.cancel()
+            practiceWork?.cancel()
+            services?.speech.stop()
+
             showingE = false
             services?.speech.restartSpeak("练习结束。", delay: 0)
             phase = .distance
         } else {
             curDirection = practiceQueue[practiceIndex]
-            practiceText = "练习 \(practiceIndex+1)/8"
-            startPracticeTrial(after: 0.8)
+            practiceText = "练习 \(practiceIndex + 1)/4"
+            startPracticeTrial(after: 0.8)   // 会自动播下一题提示
         }
     }
 
@@ -241,6 +304,8 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     // Distance (界面8)
     func onAppearDistance(_ svc: AppServices) {
         services = svc
+        svc.speech.stop()
+        startFaceTracking()
         svc.speech.restartSpeak("固定手机与眼睛同高，退到 1.2 米。距离合适后自动开始。", delay: 0)
     }
 
@@ -339,12 +404,15 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         DispatchQueue.main.async {
             self.distanceMM = dMM
             self.distanceInWindow = (dMM >= self.minMM && dMM <= self.maxMM)
+            self.maybeSpeakDistanceHint(dMM)
             if self.phase == .distance && self.distanceInWindow {
                 self.phase = .blueRight
-                self.services?.speech.restartSpeak("距离正确，开始测试。", delay: 0)
+                self.services?.speech.restartSpeak("距离正确，请保持不动，开始测试。", delay: 0)
             }
         }
 
+
+                
         // —— 统一后的 pitch（练习/测试一致） & Δz（相机坐标）
         let rawPitch = atan2(face.transform.columns.2.y, face.transform.columns.2.z) * 180 / .pi
         let pitchUnified = Self.unifyPitchDegrees(rawPitch) // 统一到 [-90,90] 且上为正
@@ -435,7 +503,7 @@ private struct VALearnPage: View {
                             Image("headmove")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 400, height: 400)
+                                .frame(width: 340)
                         }
                         else {
                             // 练习阶段：显示视标
@@ -473,10 +541,10 @@ private struct VADistancePage: View {
         ZStack {
             Color.black
             VStack(spacing: 12) {
-                Text(String(format: "%.0f mm", vm.distanceMM))
-                    .font(.system(size: 72, weight: .bold))
-                    .foregroundColor(vm.distanceInWindow ? .green : .white)
-                Text("目标 1198–1202 mm").foregroundColor(.secondary)
+                Text(String(format: "%.0f ", vm.distanceMM))
+                    .font(.system(size: 142, weight: .bold))
+                    .foregroundColor(vm.distanceInWindow ? .green : .blue)
+                Text("目标距离 1200 mm").foregroundColor(.white)
             }
         }
     }
@@ -640,4 +708,6 @@ private extension VAViewModel.Dir {
 private extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
+
+
 
