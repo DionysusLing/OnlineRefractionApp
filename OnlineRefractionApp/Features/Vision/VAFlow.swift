@@ -44,8 +44,9 @@ public struct VAFlowView: View {
                     .onAppear { vm.onAppearLearn(services) }
 
             case .distance:
-                VADistancePage(vm: vm)
-                    .onAppear { vm.onAppearDistance(services) }
+                DistanceBarsHUD(distanceMM: vm.distanceMM)
+                    .background(Color.black.ignoresSafeArea())
+                    .onAppear { vm.onAppearDistance(services) }   // ✅ 逻辑与语音不动
 
             case .blueRight:
                 VATestPage(vm: vm, theme: .blue, eye: .right)
@@ -308,7 +309,95 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         startFaceTracking()
         svc.speech.restartSpeak("固定手机与眼睛同高，退到 1.2 米。距离合适后自动开始。", delay: 0)
     }
+    // MARK: - 距离 HUD：左右竖条 + 绿色目标点 + 小号数字
+    fileprivate struct DistanceBarsHUD: View {
+        let distanceMM: CGFloat
 
+        // 目标与颜色
+        private let target: CGFloat = 1200
+        private let gateMin: CGFloat = 1192
+        private let gateMax: CGFloat = 1205
+
+        // 竖条长度映射（误差 = 0mm -> 点；误差 >= maxError -> 满条）
+        private let maxError: CGFloat = 200        // 200mm 及以上视为满条
+        private let minLen: CGFloat = 8            // 最短“点”半径对应高度
+        private let maxLen: CGFloat = 180          // 满条高度
+
+        // 误差到长度
+        private func barLen(for mm: CGFloat) -> CGFloat {
+            guard mm.isFinite else { return maxLen }
+            let e = abs(mm - target)
+            let t = min(1, e / maxError)
+            return minLen + (maxLen - minLen) * t
+        }
+
+        // 颜色：过近=紫色；过远=红色；命中（在 gateMin~gateMax 内并且很接近）=绿色
+        private func barColor(for mm: CGFloat) -> Color {
+            guard mm.isFinite else { return .gray }
+            if abs(mm - target) <= 0.5 { return .green }        // 近似命中视为绿色点
+            if mm < target { return Color.purple }
+            return Color.red
+        }
+
+        // 数字（小号）
+        private func smallNumber(_ mm: CGFloat) -> some View {
+            let v = mm.isFinite ? Int(mm.rounded()) : 0
+            return VStack(spacing: 8) {
+                Text("\(v)")
+                    .font(.system(size: 48, weight: .bold, design: .rounded)) // ← 比原来小
+                    .foregroundColor(Color.blue)
+                    .opacity(mm.isFinite ? 1 : 0.35)
+
+                Text("目标距离 1200 mm")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+
+        var body: some View {
+            let len = barLen(for: distanceMM)
+            let col = barColor(for: distanceMM)
+            let nearHit = col == .green
+
+            return ZStack {
+                Color.black.ignoresSafeArea()
+
+                GeometryReader { geo in
+                    let centerY = geo.size.height * 0.48
+                    let barW: CGFloat = 10
+
+                    // 左条 / 右条（过近紫、过远红；越接近越短）
+                    if !nearHit {
+                        RoundedRectangle(cornerRadius: barW/2)
+                            .fill(col.opacity(0.9))
+                            .frame(width: barW, height: len)
+                            .position(x: geo.size.width * 0.25, y: centerY)
+                            .shadow(color: col.opacity(0.4), radius: 8, x: 0, y: 0)
+                            .animation(.easeOut(duration: 0.15), value: len)
+
+                        RoundedRectangle(cornerRadius: barW/2)
+                            .fill(col.opacity(0.9))
+                            .frame(width: barW, height: len)
+                            .position(x: geo.size.width * 0.75, y: centerY)
+                            .shadow(color: col.opacity(0.4), radius: 8, x: 0, y: 0)
+                            .animation(.easeOut(duration: 0.15), value: len)
+                    } else {
+                        // 命中：变成发光绿色圆点（左右各一个）
+                        GlowingDot()
+                            .position(x: geo.size.width * 0.25, y: centerY)
+                        GlowingDot()
+                            .position(x: geo.size.width * 0.75, y: centerY)
+                    }
+                }
+
+                VStack { Spacer(); smallNumber(distanceMM); Spacer().frame(height: 40) }
+                    .padding(.bottom, 24)
+            }
+            .animation(.easeOut(duration: 0.15), value: distanceMM)
+        }
+    }
+
+    
     // Test entry (界面9/10)
     func onAppearTest(_ svc: AppServices, theme: Theme, eye: Eye) {
         services = svc
@@ -711,3 +800,103 @@ private extension Array {
 
 
 
+// MARK: - 绿色命中点（复用）
+fileprivate struct GlowingDot: View {
+    @State private var pulse = false
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.green).frame(width: 14, height: 14)
+            Circle()
+                .stroke(Color.green.opacity(0.7), lineWidth: 2)
+                .frame(width: 22, height: 22)
+                .scaleEffect(pulse ? 1.25 : 0.95)
+                .opacity(pulse ? 0.15 : 0.35)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+        .shadow(color: .green.opacity(0.6), radius: 8)
+    }
+}
+
+// MARK: - 距离 HUD（单条纵向指示）
+fileprivate struct DistanceBarsHUD: View {
+    let distanceMM: CGFloat
+    // 配置：目标与有效上限
+    private let target: CGFloat = 1200
+    private let maxDiff: CGFloat = 500          // ±500 mm -> 满高
+    private let barWidth: CGFloat = 12
+    private let trackPadding: CGFloat = 0.08    // 顶/底留白比例
+
+    // 计算量
+    private var diff: CGFloat {
+        guard distanceMM.isFinite else { return maxDiff }
+        return distanceMM - target                // + 远、- 近
+    }
+    // 右下角用来显示“与 1200mm 的差值”
+    private var deltaText: String {
+        let d = diff.isFinite ? diff : 0
+        return String(format: "%+d", Int(d.rounded()))   // 例如 +180 / -95 / +0
+    }
+    private var ratio: CGFloat {
+        let r = abs(diff) / maxDiff
+        return max(0, min(1, r))                  // [0,1]
+    }
+    private var barColor: Color {
+        if abs(diff) < 1 { return .green }        // 命中
+        return (diff < 0) ? .purple : .red        // 近=紫，远=红
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let fullH = geo.size.height
+            let trackH = fullH * (1 - trackPadding * 2)                  // 纵向范围
+            let fillH  = max(8, ratio * trackH)                          // 最小可见高度
+            let corner = barWidth / 2
+
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                // 居中纵向“轨道”——给个轻微对比
+                RoundedRectangle(cornerRadius: corner)
+                    .fill(Color.white.opacity(0.10))
+                    .frame(width: barWidth, height: trackH)
+
+                // 填充条或绿色命中点（居中）
+                if abs(diff) < 1 {
+                    GlowingDot()
+                } else {
+                    RoundedRectangle(cornerRadius: corner)
+                        .fill(barColor.opacity(0.95))
+                        .frame(width: barWidth, height: fillH)
+                        .shadow(color: barColor.opacity(0.45), radius: 10, x: 0, y: 0)
+                        .animation(.easeOut(duration: 0.15), value: fillH)
+                }
+
+                // 右下角小号数字（可随时去掉）
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        if distanceMM.isFinite {
+                            HStack(spacing: 4) {
+                                Text(deltaText)
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(abs(diff) < 1 ? Color.green : barColor)
+                                Text("mm")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .padding(.bottom, 4)
+                            }
+                            .opacity(0.9)
+                            .padding(.trailing, 8)
+                        }
+                    }
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+    }
+}

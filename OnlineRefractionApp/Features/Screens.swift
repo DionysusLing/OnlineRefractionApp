@@ -143,223 +143,156 @@ private struct PageDots: View {
 
 // MARK: - 2. Type & Code
 
+import SwiftUI
+
 struct TypeCodeView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
 
-    @State private var ageOK         = true
-    @State private var myopiaOnly    = true
-    @State private var code          = ""
-    @State private var agreed        = true
-    @State private var didAdvance    = false
+    // 状态（默认勾选）
+    @State private var ageOK = true
+    @State private var myopiaOnly = true
+    @State private var code = ""
+    @State private var agreed = true
     @State private var showingService = false
     @State private var showingPrivacy = false
+    @State private var didAdvance = false
 
-    // —— 可调参数：输入框高度 & 字号
-    private let inputFieldHeight: CGFloat = 50
-    private let inputFieldFont: Font      = .system(size: 20)
-
-    // —— 样例文案
-        private let serviceAgreementText = """
-        欢迎您使用“在线验光”应用（以下简称“本应用”）。在开始使用本应用前，请您务必仔细阅读并充分理解本《用户条款》。您使用本应用即视为接受并同意遵守本条款的全部内容。
-
-        一、服务内容
-        本应用基于手机前置摄像头、传感器及相关算法，为用户提供在线视力检测与验光服务，包括但不限于球镜、柱镜和散光轴位检测功能。本应用不代替专业眼科检查，仅供日常自测和参考。
-
-        二、用户资格与义务
-
-        用户应为具有完全民事行为能力的自然人或法人。未满18周岁的未成年人，应在监护人指导下使用。
-
-        用户应保证提供的信息真实、准确、完整，并对所填信息的合法性和安全性负责。
-
-        用户应合理使用本应用，不得利用本应用实施任何违法或有损他人合法权益的行为。
-
-        三、隐私与数据保护
-
-        本应用会根据功能需要，收集用户在测试过程中的摄像头数据、测距信息和测试结果，并在本地或云端进行加密存储。
-
-        我们承诺不将用户个人数据用于本条款约定之外的用途，未经用户同意，不会向第三方出售或提供。
-
-        用户可以随时在“设置”中删除本地测试记录。如需彻底删除云端数据，请联系客服。
-
-        四、知识产权
-        本应用及其各项功能、界面设计、算法模型、源代码和相关文档等，均受著作权法和相关法律保护。未经授权，任何个人或组织不得擅自复制、修改、发布、传播或用于商业用途。
-
-        五、免责声明
-
-        本应用提供的测试结果仅供参考，不能替代专业眼科诊断。如测试结果提示异常或存在视力问题，请及时就医。
-
-        因网络、设备或系统等原因，可能导致测试中断或数据误差，我们对此类情况不承担任何责任。
-
-        对于因使用或无法使用本应用而导致的任何直接或间接损失，我们在法律允许的范围内免责。
-
-        六、条款修改与终止
-
-        本应用保留随时修改、更新本条款的权利，并在应用内公告更新内容，不另行单独通知。
-
-        若您不同意修改后的条款，应立即停止使用本应用。继续使用即视为接受修改。
-
-        如用户严重违反本条款，本应用有权终止或限制其使用权限。
-
-        七、适用法律与争议解决
-        本条款的订立、生效、解释和履行均适用中华人民共和国法律。如发生争议，双方应友好协商；协商不成时，可向本应用所在地有管辖权的人民法院提起诉讼。
-
-        八、其他
-        本条款构成您与本应用之间关于使用服务的完整协议。如本条款中的任何条款被认定为无效或不可执行，不影响其他条款的效力。
-
-        感谢您的使用，祝您体验愉快！
-        """
-
-        private let privacyPolicyText = """
-        我们非常重视您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息：
-
-        1. 信息收集
-        在使用本服务过程中，我们可能收集设备信息、操作日志及您主动提供的数据。
-
-        2. 信息使用
-        这些信息仅用于改进服务体验和保障功能正常运行，不会用于未获授权的目的。
-
-        3. 信息共享
-        除非法律法规要求或得到您的明确同意，我们不会向第三方分享您的个人信息。
-
-        4. 信息安全
-        我们采取合理的安全措施保护您的信息，防止未经授权的访问、披露或破坏。
-
-        5. 权益保障
-        您有权查询、更正或删除个人信息。如对本政策有疑问，请通过应用内方式联系我们。
-
-        6. 政策更新
-        本政策可能适时修订，更新后将在应用中公布。继续使用即表示您同意最新政策。
-        """
-    
+    // 必须：三项勾选 + 邀请码 == "0000"（且为4位数字）
     private var canProceed: Bool {
-        guard agreed, ageOK, myopiaOnly else { return false }
         let trimmed = code.trimmingCharacters(in: .whitespaces)
-        return trimmed == "0000" && trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil
-    }// 必须勾选所有选项并输入合法的 "0000" 才能进入下一步
+        return ageOK
+        && myopiaOnly
+        && agreed
+        && trimmed == "0000"
+        && trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil
+    }
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Color.clear
-                .frame(height: 10)
-
-            Image("mainpic")
-                .resizable()
-                .scaledToFit()
-                .frame(width:280, height: 280)
-            Color.clear.frame(height: 30)
-
+        GeometryReader { geo in
             
-            // 年龄行
-            HStack(spacing: 18) {
-                Image(Asset.icoAge)
-                    .resizable().frame(width: 32, height: 32)
-                Text("我的年龄在 16–50 岁间")
-                    .font(.system(size: 20))
-                    .foregroundColor(.black)
-                Spacer()
-                Image(Asset.chChecked)
-                    .renderingMode(.template)
-                    .resizable().frame(width: 22, height: 22)
-                    .foregroundColor(ageOK ? .blue : .gray)
-                    .onTapGesture {
-                        ageOK.toggle()
-                        tryProceed()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 18) {
+                    
+                    Color.clear.frame(height: 30)
+                    
+                    // 顶部插画
+                    Image("mainpic")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width:240, height: 240)
+                    Color.clear.frame(height: 30)
+
+                    // 内容卡片
+                    VStack(spacing: 14) {
+
+                        CheckRow(
+                            icon: Image(Asset.icoAge),
+                            title: "我的年龄在 16–50 岁间",
+                            checked: ageOK
+                        ) {
+                            ageOK.toggle(); tryProceed()
+                        }
+
+                        CheckRow(
+                            icon: Image(Asset.icoMyopia),
+                            title: "我是近视，不是远视",
+                            checked: myopiaOnly
+                        ) {
+                            myopiaOnly.toggle(); tryProceed()
+                        }
+
+                        // 邀请码（必填且必须 0000 才能进入）
+                        VStack(alignment: .leading, spacing: 8) {
+                            Color.clear.frame(height: 16)
+                         //   Text("邀请码")
+                         //       .font(.footnote)
+                         //       .foregroundColor(.secondary)
+
+                            TextField("点击这里输入或粘贴邀请码", text: $code)
+                                .keyboardType(.numberPad)
+                                .textInputAutocapitalization(.never)
+                                .submitLabel(.done)
+                                .onSubmit { tryProceed() }
+                                .padding(.horizontal, 12)
+                                .frame(height: 52)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.gray.opacity(0.22), lineWidth: 1)
+                                )
+                        }
                     }
-            }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(UIColor.systemGroupedBackground))
+                    )
+                    .padding(.horizontal, 20)
 
-            // 近视行
-            HStack(spacing: 18) {
-                Image(Asset.icoMyopia)
-                    .resizable().frame(width: 32, height: 32)
-                Text("我是近视，不是远视")
-                    .font(.system(size: 20))
-                    .foregroundColor(.black)
-                Spacer()
-                Image(Asset.chChecked)
-                    .renderingMode(.template)
-                    .resizable().frame(width: 22, height: 22)
-                    .foregroundColor(myopiaOnly ? .blue : .gray)
-                    .onTapGesture {
-                        myopiaOnly.toggle()
-                        tryProceed()
+                    Color.clear.frame(height: 90)
+                    // 协议
+                    HStack(spacing: 8) {
+                        Image(agreed ? Asset.chChecked : Asset.chUnchecked)
+                            .renderingMode(.template)
+                            .resizable()
+                            .frame(width: 18, height: 18)
+                            .foregroundColor(agreed ? .blue : .gray)
+                            .onTapGesture { agreed.toggle(); tryProceed() }
+
+                        Text("已阅读并同意")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+
+                        Button("服务协议") { showingService = true }
+                            .font(.footnote)
+
+                        Text("和")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+
+                        Button("隐私条款") { showingPrivacy = true }
+                            .font(.footnote)
                     }
+                    .padding(.horizontal, 24)
+
+                    Spacer(minLength: 16)
+                }
+                .padding(.bottom, 40) // 给底部语音条预留空间
             }
+            .background(Color.white.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                VoiceBar()
+                    .scaleEffect(0.5)
+                    .padding(.vertical, 8)
+                    .padding(.bottom, -36) // ⬅️ +上-下移 xxpt
 
-
-
-            // 邀请码输入
-            TextField("点击这里输入或粘贴邀请码", text: $code)
-                .font(inputFieldFont)
-                .padding(.horizontal, 12)
-                .frame(height: inputFieldHeight)
-                .background(
-                    RoundedRectangle(cornerRadius: 6).fill(Color.white)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                      .stroke(Color.gray, lineWidth: 0.5)
-                )
-                .textInputAutocapitalization(.never)
-                .keyboardType(.numberPad)
-                .submitLabel(.done)
-                .onSubmit { tryProceed() }
-                .padding(.vertical, 4)
-
-
-
-            // 服务协议行
-            HStack(spacing: 4) {
-                Image(agreed ? Asset.chChecked : Asset.chUnchecked)
-                    .renderingMode(.template)
-                    .resizable().frame(width: 16, height: 16)
-                    .foregroundColor(agreed ? .blue : .gray)
-                    .onTapGesture { agreed.toggle() }
-
-                Text("已阅读并同意")
-                    .font(.footnote)
-
-                Button("服务协议") { showingService = true }
-                    .font(.footnote)
-                    .foregroundColor(.blue)
-
-                Text("和")
-                    .font(.footnote)
-
-                Button("隐私条款") { showingPrivacy = true }
-                    .font(.footnote)
-                    .foregroundColor(.blue)
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-
-            
-            Color.clear.frame(height: 50)
-            
-            VoiceBar().scaleEffect(0.5)
         }
-        .pagePadding()
         .onAppear {
+            // 保持原有语音逻辑
             services.speech.restartSpeak(
                 "请确认年龄与验光类型，同意服务协议。输入邀请码后自动进入下一步。",
-                delay: 0.15
+                delay: 0.2
             )
         }
-      .onChange(of: code)       { _ in tryProceed() }
-       // ageOK/myopiaOnly/agreed 的 tapGesture 里也会调用 tryProceed
+        .onChangeCompat(code) { _, _ in
+            tryProceed()
+        }
 
-        
-        // MARK: 协议弹框
-      .sheet(isPresented: $showingService) {
-          NavigationStack {
-              ScrollView {
-                  Text(serviceAgreementText)
-                      .frame(maxWidth: .infinity, alignment: .leading)
-                      .padding()
-              }
-              .navigationTitle("服务协议")
-              .navigationBarTitleDisplayMode(.inline)
-          }
-      }
+        // 协议弹层
+        .sheet(isPresented: $showingService) {
+            NavigationStack {
+                ScrollView {
+                    Text(serviceAgreementText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("服务协议")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
         .sheet(isPresented: $showingPrivacy) {
             NavigationStack {
                 ScrollView {
@@ -369,7 +302,6 @@ struct TypeCodeView: View {
                 }
                 .navigationTitle("隐私条款")
                 .navigationBarTitleDisplayMode(.inline)
-                
             }
         }
     }
@@ -379,9 +311,124 @@ struct TypeCodeView: View {
         didAdvance = true
         DispatchQueue.main.async { state.path.append(.checklist) }
     }
+
+    // MARK: - 协议正文（占位）
+    private let serviceAgreementText = """
+            欢迎您使用“在线验光”应用（以下简称“本应用”）。在开始使用本应用前，请您务必仔细阅读并充分理解本《用户条款》。您使用本应用即视为接受并同意遵守本条款的全部内容。
+
+            一、服务内容
+            本应用基于手机前置摄像头、传感器及相关算法，为用户提供在线视力检测与验光服务，包括但不限于球镜、柱镜和散光轴位检测功能。本应用不代替专业眼科检查，仅供日常自测和参考。
+
+            二、用户资格与义务
+
+            用户应为具有完全民事行为能力的自然人或法人。未满18周岁的未成年人，应在监护人指导下使用。
+            用户应保证提供的信息真实、准确、完整，并对所填信息的合法性和安全性负责。
+            用户应合理使用本应用，不得利用本应用实施任何违法或有损他人合法权益的行为。
+
+            三、隐私与数据保护
+
+            本应用会根据功能需要，收集用户在测试过程中的摄像头数据、测距信息和测试结果，并在本地或云端进行加密存储。
+            我们承诺不将用户个人数据用于本条款约定之外的用途，未经用户同意，不会向第三方出售或提供。
+            用户可以随时在“设置”中删除本地测试记录。如需彻底删除云端数据，请联系客服。
+
+            四、知识产权
+            本应用及其各项功能、界面设计、算法模型、源代码和相关文档等，均受著作权法和相关法律保护。未经授权，任何个人或组织不得擅自复制、修改、发布、传播或用于商业用途。
+
+            五、免责声明
+
+            本应用提供的测试结果仅供参考，不能替代专业眼科诊断。如测试结果提示异常或存在视力问题，请及时就医。
+            因网络、设备或系统等原因，可能导致测试中断或数据误差，我们对此类情况不承担任何责任。
+            对于因使用或无法使用本应用而导致的任何直接或间接损失，我们在法律允许的范围内免责。
+
+            六、条款修改与终止
+
+            本应用保留随时修改、更新本条款的权利，并在应用内公告更新内容，不另行单独通知。
+            若您不同意修改后的条款，应立即停止使用本应用。继续使用即视为接受修改。
+            如用户严重违反本条款，本应用有权终止或限制其使用权限。
+
+            七、适用法律与争议解决
+            本条款的订立、生效、解释和履行均适用中华人民共和国法律。如发生争议，双方应友好协商；协商不成时，可向本应用所在地有管辖权的人民法院提起诉讼。
+
+            八、其他
+            本条款构成您与本应用之间关于使用服务的完整协议。如本条款中的任何条款被认定为无效或不可执行，不影响其他条款的效力。
+
+            感谢您的使用，祝您体验愉快！
+            """
+
+            private let privacyPolicyText = """
+            我们非常重视您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息：
+
+            1. 信息收集
+            在使用本服务过程中，我们可能收集设备信息、操作日志及您主动提供的数据。
+
+            2. 信息使用
+            这些信息仅用于改进服务体验和保障功能正常运行，不会用于未获授权的目的。
+
+            3. 信息共享
+            除非法律法规要求或得到您的明确同意，我们不会向第三方分享您的个人信息。
+
+            4. 信息安全
+            我们采取合理的安全措施保护您的信息，防止未经授权的访问、披露或破坏。
+
+            5. 权益保障
+            您有权查询、更正或删除个人信息。如对本政策有疑问，请通过应用内方式联系我们。
+
+            6. 政策更新
+            本政策可能适时修订，更新后将在应用中公布。继续使用即表示您同意最新政策。
+            """
+}
+
+// MARK: - 统一的勾选行组件
+private struct CheckRow: View {
+    let icon: Image
+    let title: String
+    var checked: Bool
+    var onTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            icon.resizable().frame(width: 28, height: 28)
+            Text(title)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.primary)
+            Spacer()
+            Image(Asset.chChecked)
+                .renderingMode(.template)
+                .resizable()
+                .frame(width: 22, height: 22)
+                .foregroundColor(checked ? .blue : .gray.opacity(0.5))
+                .onTapGesture { onTap() }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(checked ? Color.blue.opacity(0.25) : Color.gray.opacity(0.18), lineWidth: 1)
+                )
+        )
+    }
+}
+
+#Preview {
+    TypeCodeView()
+        .environmentObject(AppState())
+        .environmentObject(AppServices())
 }
 
 
+#if DEBUG
+struct ChecklistView_Previews: PreviewProvider {
+    static var previews: some View {
+        ChecklistView()
+            .environmentObject(AppState())
+            .environmentObject(AppServices())
+            .previewDisplayName("Checklist")
+            .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif
 
 // MARK: - 3. Checklist（兼容从设置返回 / 旧机型）
 
@@ -617,7 +664,7 @@ struct PDView: View {
         .onAppear {
             // 仅第一次进入时播报
             if index == 1, !hasSpokenIntro {
-                services.speech.restartSpeak("开始第一次瞳距测量。请把脸与手机保持三十五厘米，保持稳定。", delay: 0.25)
+                services.speech.restartSpeak("开始第一次瞳距测量。请取下眼镜，正脸面向手机，保持在三十五厘米距离。", delay: 0.25)
                 hasSpokenIntro = true
             }
             pdSvc.start()
@@ -844,7 +891,7 @@ struct CYLAxialAView: View {
                         didSpeak = true
                         runGuideSpeechAndGate()
                     }
-                    .onChange(of: phase) { newPhase in
+                    .onChangeCompat(phase) { _, newPhase in
                         if newPhase == .guide { runGuideSpeechAndGate() }
                     }
                 }
@@ -1253,6 +1300,7 @@ private struct ResultSheetContent: View {
 }
 
 /// 结果页（带“保存到相册”按钮）
+// 结果页（带“保存到相册”按钮）
 struct ResultSheetView: View {
     let outcome: VAFlowOutcome
     let pdText: String?
@@ -1260,42 +1308,60 @@ struct ResultSheetView: View {
     let leftAxisDeg: Int?
     let rightFocusMM: Double?
     let leftFocusMM: Double?
-    
+
     @Environment(\.dismiss) private var dismiss
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
-    
+
+    // 和 TypeCodeV2View 一样的头图高度
+    private let headerH: CGFloat = 300
+
     var body: some View {
-        VStack(spacing: 16) {
-            ScrollView {
-                // —— 将所有参数传给 ResultSheetContent ——
-                ResultSheetContent(
-                    outcome:       outcome,
-                    pdText:        pdText,
-                    rightAxisDeg:  rightAxisDeg,
-                    leftAxisDeg:   leftAxisDeg,
-                    rightFocusMM:  rightFocusMM,
-                    leftFocusMM:   leftFocusMM
-                )
+        ZStack(alignment: .top) {
+
+            // 顶部蓝色头图（无进度条）
+            V2BlueHeader(
+                title: "验光单",
+                subtitle: "本次测得结果，可保存到相册或分享给医生",
+                progress: nil,          // 不显示进度
+                height: headerH
+            )
+            .ignoresSafeArea(edges: .top)
+
+            VStack(spacing: 16) {
+                ScrollView {
+                    // 白卡片内容维持你原样（用于渲染图片的那套）
+                    ResultSheetContent(
+                        outcome:       outcome,
+                        pdText:        pdText,
+                        rightAxisDeg:  rightAxisDeg,
+                        leftAxisDeg:   leftAxisDeg,
+                        rightFocusMM:  rightFocusMM,
+                        leftFocusMM:   leftFocusMM
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                }
+
+                Button {
+                    Task { await saveToAlbum() }
+                } label: {
+                    Label(isSaving ? "正在保存…" : "保存到相册",
+                          systemImage: isSaving ? "hourglass" : "square.and.arrow.down")
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(isSaving)
                 .padding(.horizontal, 16)
-                .padding(.top, 16)
+                .padding(.bottom, 20)
             }
-            
-            Button {
-                Task { await saveToAlbum() }
-            } label: {
-                Label(isSaving ? "正在保存…" : "保存到相册",
-                      systemImage: isSaving ? "hourglass" : "square.and.arrow.down")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(isSaving)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 20)
+            // 让正文从头图的视觉底部开始
+            .padding(.top, headerH * 0.62)
         }
-        // .navigationTitle("验光单")
+        .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) {
             Button("好", role: .cancel) { }
@@ -1303,14 +1369,12 @@ struct ResultSheetView: View {
             Text(alertMsg)
         }
     }
-    
-    // MARK: - 保存到相册
+
+    // MARK: - 保存到相册（保持你的原逻辑不变）
     private func saveToAlbum() async {
         isSaving = true
         defer { isSaving = false }
-        
-        // （这里补上你的相册权限判断和写入逻辑，保持不变）
-        // —— 注意渲染时也要传入同样的参数 ——
+
         let content = ResultSheetContent(
             outcome:       outcome,
             pdText:        pdText,
@@ -1319,39 +1383,32 @@ struct ResultSheetView: View {
             rightFocusMM:  rightFocusMM,
             leftFocusMM:   leftFocusMM
         )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(Color.white)
-        
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(Color.white)
+
         let renderer = ImageRenderer(content: content)
         renderer.scale = UIScreen.main.scale
-        
-#if canImport(UIKit)
+
+        #if canImport(UIKit)
         guard let uiImage = renderer.uiImage else {
             alertMsg = "生成图片失败。"
             showAlert = true
             return
         }
-        // —— 请求相册写入权限 ——
         let currentStatus = PHPhotoLibrary.authorizationStatus()
         switch currentStatus {
         case .authorized, .limited:
-            // 已有权限，直接写入
             PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
             } completionHandler: { success, error in
                 DispatchQueue.main.async {
-                    if success {
-                        alertMsg = "已成功保存到相册"
-                    } else {
-                        alertMsg = "保存失败：\(error?.localizedDescription ?? "未知错误")"
-                    }
+                    alertMsg = success ? "已成功保存到相册" : "保存失败：\(error?.localizedDescription ?? "未知错误")"
                     showAlert = true
                 }
             }
-            
+
         case .notDetermined:
-            // 首次请求
             PHPhotoLibrary.requestAuthorization { newStatus in
                 DispatchQueue.main.async {
                     if newStatus == .authorized || newStatus == .limited {
@@ -1359,11 +1416,7 @@ struct ResultSheetView: View {
                             PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
                         } completionHandler: { success, error in
                             DispatchQueue.main.async {
-                                if success {
-                                    alertMsg = "已成功保存到相册"
-                                } else {
-                                    alertMsg = "保存失败：\(error?.localizedDescription ?? "未知错误")"
-                                }
+                                alertMsg = success ? "已成功保存到相册" : "保存失败：\(error?.localizedDescription ?? "未知错误")"
                                 showAlert = true
                             }
                         }
@@ -1373,19 +1426,18 @@ struct ResultSheetView: View {
                     }
                 }
             }
-            
+
         default:
-            // 已被拒绝或受限
             alertMsg = "无法访问相册权限。"
             showAlert = true
         }
-#else
-        // macOS 平台或其它情况：直接失败
+        #else
         alertMsg = "此平台不支持相册保存。"
         showAlert = true
-#endif
+        #endif
     }
 }
+
 
 
 
