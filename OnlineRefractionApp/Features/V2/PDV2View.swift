@@ -19,26 +19,42 @@ struct PDV2View: View {
     // Ticks 动效与成功扫光
     @State private var ticksRotation: Double = 0
     @State private var successSweep: CGFloat = 0
-
+    
+    // 停留时长：前两次 each 1s，最后一次 2s
+    private let postLockStayStep:  TimeInterval = 1.5
+    private let postLockStayFinal: TimeInterval = 2
+    
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 // StepProgress(step: 3, total: 8)  // ⛔️ 按要求移除
                 card
-                HStack { Spacer(); SpeakerView(); Spacer() }
+                Color.clear.frame(height: 60)
+                HStack {
+                    Spacer()
+                    SpeakerView()
+                        .opacity(0.2) // 透明度 0~1
+                    Spacer()
+                }
+                
             }
             .padding(24)
         }
         .background(Color.black.ignoresSafeArea())
         // 进入页：播报开场（不再自己调用 speak）
-        .screenSpeech("开始第\(index)次瞳距测量。请正视屏幕，与眼同高，保持不动。", delay: 0.12)
+        .screenSpeech(
+            index == 1
+            ? "开始瞳距测量。请取下眼镜，脸正对手机，与屏幕同高，调整距离到35厘米，让红色测距条变短并消失。"
+            : "开始第\(index)次瞳距测量。",
+            delay: 0.12
+        )
         // 启动相机与采样循环
         .onAppear {
             if !isCapturing {
                 pdSvc.start()
                 spin = true
-                // 开启刻度旋转
+                // 开启刻度旋转。在duration调转速
                 ticksRotation = 0
                 withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
                     ticksRotation = 360
@@ -54,17 +70,18 @@ struct PDV2View: View {
             .frame(height: 72)
             .padding(.horizontal, 24)
             .allowsHitTesting(false)
+            .id("PDV2-\(index)")
         }
     }
 
     // MARK: - Header
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("瞳距（PD）测量")
-                .font(ThemeV2.Fonts.title())
-            Text("系统将自动判断并记录结果，无需点击。")
-                .font(ThemeV2.Fonts.note())
-                .foregroundColor(ThemeV2.Colors.subtext)
+      //      Text("瞳距（PD）测量")
+       //         .font(ThemeV2.Fonts.title())
+      //      Text("系统将自动判断并记录结果，无需点击。")
+      //          .font(ThemeV2.Fonts.note())
+       //         .foregroundColor(ThemeV2.Colors.subtext)
         }
     }
 
@@ -165,8 +182,13 @@ struct PDV2View: View {
                 // 简化 HUD：只保留 距离 / PD 到圆下方
                 InfoBar(
                     tone: hasResult ? .ok : .info,
-                    text: String(format: "D %@  ·  PD %@", fmtCM(pdSvc.distance_m), fmtIPD(pdSvc.ipd_mm))
+                    text: String(
+                        format: "D %@  ·  PD %@",
+                        fmtCM(pdSvc.distance_m, unit: "cm", digits: 0, scale: 100.0),   // m → cm
+                        fmtIPD(pdSvc.ipd_mm)
+                    )
                 )
+                .offset(y: 150)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, 6)
@@ -224,12 +246,23 @@ struct PDV2View: View {
         flashHighlight()
         successSweep = 0
         withAnimation(.linear(duration: 0.9)) { successSweep = 1.0 }
-        // 先播报，再稍作停留，让用户感受“完成”
-        services.speech.speak(String(format: "瞳距 %.1f 毫米，已记录。", ipd))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
+
+        // 播报
+        services.speech.restartSpeak("测量完成。", delay: 0)
+
+        // ✅ 前两次停 1s，最后一次（index == 3）停 2.5s 再离开
+        let stay: TimeInterval = (index == 3) ? postLockStayFinal : postLockStayStep
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + stay) {
+            // （可选）完成后停相机
+            // pdSvc.stop()
+
             onFinish(ipd)
-            // 重置扫光，留给下一次使用
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { successSweep = 0 }
+
+            // 轻微延后把扫光复位，留给下一次
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                successSweep = 0
+            }
         }
     }
 
@@ -390,3 +423,28 @@ fileprivate struct DistanceBarH: View {
         }
     }
 }
+
+
+#if DEBUG
+import SwiftUI
+
+
+struct PDV2View_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            PDV2View(index: 1, onFinish: { _ in })
+                .environmentObject(AppServices())
+                .environmentObject(AppState())
+                .previewDisplayName("PD · Light")
+                .previewDevice("iPhone 15 Pro")
+
+            PDV2View(index: 1, onFinish: { _ in })
+                .environmentObject(AppServices())
+                .environmentObject(AppState())
+                .preferredColorScheme(.dark)
+                .previewDisplayName("PD · Dark")
+                .previewDevice("iPhone 15 Pro")
+        }
+    }
+}
+#endif

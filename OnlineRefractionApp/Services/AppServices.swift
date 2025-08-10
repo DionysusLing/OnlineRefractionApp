@@ -43,6 +43,7 @@ extension SpeechServicing {
 
 
 final class AppServices: ObservableObject {
+    @Published var speechEnabled: Bool = true
     let speech: SpeechServicing
     init(speech: SpeechServicing = SpeechService()) { self.speech = speech }
 }

@@ -24,11 +24,15 @@ struct CYLAxial2AView: View {
 
                 Group {
                     if phase == .guide {
+                        Image("cylguide")
+                            .resizable().scaledToFit()
+                            .frame(width: min(g.size.width * 0.80, 360))
+                            .offset(y: -60)
                         // —— 纯 SwiftUI 矢量引导动效：近↔远 —— //
-                        PhoneMotionSVG()
-                            .frame(width: min(g.size.width * 0.86, 420), height: min(g.size.width * 0.86, 420))
-                            .accessibilityHidden(true)
-                            .offset(y: -40)
+                       // PhoneMotionSVG()
+                         //   .frame(width: min(g.size.width * 0.86, 420), height: min(g.size.width * 0.86, 420))
+                      //      .accessibilityHidden(true)
+                        //    .offset(y: -40)
                     } else {
                         // —— 专业矢量散光盘（唯一主体） —— //
                         CylStarVector(
@@ -42,11 +46,11 @@ struct CYLAxial2AView: View {
                             lineCap: .butt
                         )
                         .frame(width: 320, height: 320)
-                        .offset(y: -40)
+                        .offset(y: -48)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .offset(y: (phase == .decide && showChoices) ? -120 : 0)
+                .offset(y: (phase == .decide && showChoices) ? -90 : 0)
                 .animation(.easeInOut(duration: 0.25), value: showChoices)
 
                 // —— 底部操作区（极简、低干扰） —— //
@@ -209,3 +213,20 @@ private struct PhoneShape: Shape {
         return p
     }
 }
+
+
+#if DEBUG
+struct CYLAxial2AView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            CYLAxial2AView(eye: .right)   // ← 强制第二阶段
+                .previewDisplayName("散光盘A · 右眼 · 矢量")
+            CYLAxial2AView(eye: .left)
+                .previewDisplayName("散光盘A · 左眼 · 矢量")
+        }
+        .environmentObject(AppState())
+        .environmentObject(AppServices())
+        .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif

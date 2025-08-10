@@ -411,24 +411,6 @@ private struct CheckRow: View {
     }
 }
 
-#Preview {
-    TypeCodeView()
-        .environmentObject(AppState())
-        .environmentObject(AppServices())
-}
-
-
-#if DEBUG
-struct ChecklistView_Previews: PreviewProvider {
-    static var previews: some View {
-        ChecklistView()
-            .environmentObject(AppState())
-            .environmentObject(AppServices())
-            .previewDisplayName("Checklist")
-            .previewDevice("iPhone 15 Pro")
-    }
-}
-#endif
 
 // MARK: - 3. Checklist（兼容从设置返回 / 旧机型）
 
@@ -943,7 +925,6 @@ struct CYLAxialAView: View {
 }
 
 
-
 // MARK: - 5B：点击外圈数字得轴向
 
 struct CYLAxialMoreView: View {
@@ -1206,60 +1187,38 @@ struct VAEndView: View {
 }
 
 
-// MARK: - 12. Result（验光单页 + 保存到相册）
+// 12 · Result（验光单页 + 保存到相册 · UI2按钮）
 import SwiftUI
 import Photos
 
+// 仅负责绘制白色“验光单”卡片，用于屏幕展示 & 渲染成图片
+private struct ResultCard: View {
+    let pdText: String?
+    let rightAxisDeg: Int?
+    let leftAxisDeg: Int?
+    let rightFocusMM: Double?
+    let leftFocusMM: Double?
+    let rightBlue: Double?
+    let rightWhite: Double?
+    let leftBlue: Double?
+    let leftWhite: Double?
 
-// 让 VAFlowOutcome 能用于 .sheet(item:)
-extension VAFlowOutcome: Identifiable {
-    public var id: String {
-        "rb:\(rightBlue ?? -99)_rw:\(rightWhite ?? -99)_lb:\(leftBlue ?? -99)_lw:\(leftWhite ?? -99)"
-    }
-}
-
-/// 仅负责“画面”的内容视图（用于渲染成图片）
-private struct ResultSheetContent: View {
-    let outcome: VAFlowOutcome
-    let pdText: String?           // 瞳距
-    let rightAxisDeg: Int?        // 右眼轴向
-    let leftAxisDeg: Int?         // 左眼轴向
-    let rightFocusMM: Double?     // 右眼焦线位置
-    let leftFocusMM: Double?      // 左眼焦线位置
-
-    // 原来的格式化函数
-    private func f(_ v: Double?) -> String {
-        v.map { String(format: "%.1f", $0) } ?? "—"
-    }
-    // 轴向和焦线的专用格式化
-    private func axisText(_ a: Int?) -> String {
-        a.map { "\($0)°" } ?? "—"
-    }
-    private func focusText(_ f: Double?) -> String {
-        f.map { String(format: "%.0f mm", $0) } ?? "—"
-    }
+    private func f(_ v: Double?) -> String { v.map{ String(format: "%.1f", $0) } ?? "—" }
+    private func axis(_ a: Int?) -> String { a.map{ "\($0)°"} ?? "—" }
+    private func focus(_ v: Double?) -> String { v.map{ String(format: "%.0f mm", $0) } ?? "—" }
 
     var body: some View {
-        Spacer(minLength: 38)
         VStack(alignment: .leading, spacing: 16) {
-            // —— 大字号标题放入白卡片内 ——
-            Text("验光单")
-                .font(.system(size: 32))
-            Spacer(minLength: 8)
-            
-            // —— 第 1 行：瞳距 ——
+            Text("验光单").font(.system(size: 28, weight: .semibold))
+
             HStack {
                 Text("瞳距").font(.headline)
                 Spacer()
-                Text(pdText ?? "—").font(.body)
+                Text(pdText ?? "—")
             }
-            Spacer(minLength: 2)
-            // —— 第 2 部分：五列表格 ——
+
             Grid(alignment: .leadingFirstTextBaseline,
-                 horizontalSpacing: 16,
-                 verticalSpacing: 12)
-            {
-                // 表头
+                 horizontalSpacing: 16, verticalSpacing: 12) {
                 GridRow {
                     Text("眼别").font(.headline)
                     Text("蓝屏").font(.headline)
@@ -1268,124 +1227,110 @@ private struct ResultSheetContent: View {
                     Text("焦线位置").font(.headline)
                 }
                 Divider()
-                // 右眼
                 GridRow {
                     Text("右眼")
-                    Text(f(outcome.rightBlue))
-                    Text(f(outcome.rightWhite))
-                    Text(axisText(rightAxisDeg))
-                    Text(focusText(rightFocusMM))
+                    Text(f(rightBlue))
+                    Text(f(rightWhite))
+                    Text(axis(rightAxisDeg))
+                    Text(focus(rightFocusMM))
                 }
-                // 左眼
                 GridRow {
                     Text("左眼")
-                    Text(f(outcome.leftBlue))
-                    Text(f(outcome.leftWhite))
-                    Text(axisText(leftAxisDeg))
-                    Text(focusText(leftFocusMM))
+                    Text(f(leftBlue))
+                    Text(f(leftWhite))
+                    Text(axis(leftAxisDeg))
+                    Text(focus(leftFocusMM))
                 }
             }
 
-            // —— 第 3 行：单位说明 ——
-            Text("（单位：logMAR／mm 或你项目中实际使用的单位）")
+            Text("（单位：logMAR／mm 或项目内实际单位）")
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white) // 渲染图片时要白底
+        .background(Color.white)
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
     }
 }
 
-/// 结果页（带“保存到相册”按钮）
-// 结果页（带“保存到相册”按钮）
-struct ResultSheetView: View {
-    let outcome: VAFlowOutcome
+struct ResultV2View: View {
+    // 这些值从你的状态/AppState传入；这里用可选便于对接
     let pdText: String?
     let rightAxisDeg: Int?
     let leftAxisDeg: Int?
     let rightFocusMM: Double?
     let leftFocusMM: Double?
+    let rightBlue: Double?
+    let rightWhite: Double?
+    let leftBlue: Double?
+    let leftWhite: Double?
 
-    @Environment(\.dismiss) private var dismiss
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
 
-    // 和 TypeCodeV2View 一样的头图高度
-    private let headerH: CGFloat = 300
+    private let headerH: CGFloat = 260
 
     var body: some View {
         ZStack(alignment: .top) {
-
-            // 顶部蓝色头图（无进度条）
+            // 顶部蓝色头图（和其它 v2 页面一致）
             V2BlueHeader(
-                title: "验光单",
-                subtitle: "本次测得结果，可保存到相册或分享给医生",
-                progress: nil,          // 不显示进度
+                title: "验光完成",
+                subtitle: "系统已将配镜度数发给您的配镜服务商",
+                progress: nil,
                 height: headerH
             )
             .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 16) {
-                ScrollView {
-                    // 白卡片内容维持你原样（用于渲染图片的那套）
-                    ResultSheetContent(
-                        outcome:       outcome,
-                        pdText:        pdText,
-                        rightAxisDeg:  rightAxisDeg,
-                        leftAxisDeg:   leftAxisDeg,
-                        rightFocusMM:  rightFocusMM,
-                        leftFocusMM:   leftFocusMM
+                ScrollView(showsIndicators: false) {
+                    ResultCard(
+                        pdText: pdText,
+                        rightAxisDeg: rightAxisDeg, leftAxisDeg: leftAxisDeg,
+                        rightFocusMM: rightFocusMM, leftFocusMM: leftFocusMM,
+                        rightBlue: rightBlue, rightWhite: rightWhite,
+                        leftBlue: leftBlue, leftWhite: leftWhite
                     )
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     .padding(.bottom, 8)
                 }
 
-                Button {
+                // UI2 主按钮：GlowButton（渐变胶囊、阴影已内置）
+                GlowButton(title: isSaving ? "正在保存…" : "保存到相册", disabled: isSaving) {
                     Task { await saveToAlbum() }
-                } label: {
-                    Label(isSaving ? "正在保存…" : "保存到相册",
-                          systemImage: isSaving ? "hourglass" : "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(isSaving)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
             }
-            // 让正文从头图的视觉底部开始
-            .padding(.top, headerH * 0.62)
+            .padding(.top, headerH * 0.60)
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) {
-            Button("好", role: .cancel) { }
+            Button("好", role: .cancel) {}
         } message: {
             Text(alertMsg)
         }
     }
 
-    // MARK: - 保存到相册（保持你的原逻辑不变）
+    // MARK: - 保存到相册
     private func saveToAlbum() async {
         isSaving = true
         defer { isSaving = false }
 
-        let content = ResultSheetContent(
-            outcome:       outcome,
-            pdText:        pdText,
-            rightAxisDeg:  rightAxisDeg,
-            leftAxisDeg:   leftAxisDeg,
-            rightFocusMM:  rightFocusMM,
-            leftFocusMM:   leftFocusMM
+        let content = ResultCard(
+            pdText: pdText,
+            rightAxisDeg: rightAxisDeg, leftAxisDeg: leftAxisDeg,
+            rightFocusMM: rightFocusMM, leftFocusMM: leftFocusMM,
+            rightBlue: rightBlue, rightWhite: rightWhite,
+            leftBlue: leftBlue, leftWhite: leftWhite
         )
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
-        .background(Color.white)
+        .background(Color.white)          // 渲染成图片必须白底
 
         let renderer = ImageRenderer(content: content)
         renderer.scale = UIScreen.main.scale
@@ -1396,49 +1341,57 @@ struct ResultSheetView: View {
             showAlert = true
             return
         }
-        let currentStatus = PHPhotoLibrary.authorizationStatus()
-        switch currentStatus {
-        case .authorized, .limited:
-            PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
-            } completionHandler: { success, error in
-                DispatchQueue.main.async {
-                    alertMsg = success ? "已成功保存到相册" : "保存失败：\(error?.localizedDescription ?? "未知错误")"
-                    showAlert = true
-                }
-            }
 
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization { newStatus in
-                DispatchQueue.main.async {
-                    if newStatus == .authorized || newStatus == .limited {
-                        PHPhotoLibrary.shared().performChanges {
-                            PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
-                        } completionHandler: { success, error in
-                            DispatchQueue.main.async {
-                                alertMsg = success ? "已成功保存到相册" : "保存失败：\(error?.localizedDescription ?? "未知错误")"
-                                showAlert = true
-                            }
-                        }
-                    } else {
-                        alertMsg = "无法访问相册权限。"
-                        showAlert = true
-                    }
-                }
+        let status = PHPhotoLibrary.authorizationStatus()
+        if status == .notDetermined {
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            if !(newStatus == .authorized || newStatus == .limited) {
+                alertMsg = "未获得相册写入权限。"
+                showAlert = true
+                return
             }
-
-        default:
-            alertMsg = "无法访问相册权限。"
+        } else if !(status == .authorized || status == .limited) {
+            alertMsg = "未获得相册写入权限。"
             showAlert = true
+            return
+        }
+
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+        } completionHandler: { success, error in
+            DispatchQueue.main.async {
+                alertMsg = success ? "已保存到相册" : "保存失败：\(error?.localizedDescription ?? "未知错误")"
+                showAlert = true
+            }
         }
         #else
-        alertMsg = "此平台不支持相册保存。"
+        alertMsg = "当前平台不支持相册保存。"
         showAlert = true
         #endif
     }
 }
 
+//========================================
+#if DEBUG
+import SwiftUI
 
-
-
-//================
+struct ResultV2View_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            ResultV2View(
+                pdText:       "62.0 mm",
+                rightAxisDeg: 90,
+                leftAxisDeg:  85,
+                rightFocusMM: 12,
+                leftFocusMM:  10,
+                rightBlue:    0.1,
+                rightWhite:   0.0,
+                leftBlue:     0.2,
+                leftWhite:   -0.1
+            )
+        }
+        .previewDisplayName("结果页预览")
+        .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif

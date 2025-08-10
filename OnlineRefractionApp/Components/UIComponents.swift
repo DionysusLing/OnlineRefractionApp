@@ -18,7 +18,7 @@ struct VoiceBar: View {
         Image(Asset.voice)
             .resizable()
             .scaledToFit()
-            .frame(height: 44)
+            .frame(height: 66)
             .padding(.bottom, 8)
             .frame(maxWidth: .infinity, alignment: .center)
     }

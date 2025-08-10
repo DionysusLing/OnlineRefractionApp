@@ -156,7 +156,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let zone: DistanceZone = (dMM < nearTh) ? .near :
                                  (dMM > farTh)  ? .far  : .ok
 
-        // 在“合适”区不打扰
+        // 在“合适”区才说
         guard zone != .ok else { return }
 
         let now = Date()
@@ -164,8 +164,11 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         // 全局节流：不论区间是否变化，都至少间隔 hintCooldown 才能再说
         if now.timeIntervalSince(lastSpokenAt) < hintCooldown { return }
 
+        // 新增：播报节流，1.5 秒间隔
+        if now.timeIntervalSince(lastSpokenAt) < 1.5 { return }
+
         // 通过再播
-        lastSpokenAt  = now
+        lastSpokenAt = now
         lastSpokenZone = zone
 
         let text = (zone == .near) ? "距离不足，请移远一些。" : "距离过大，请靠近一些。"
@@ -674,16 +677,18 @@ private struct VATestPage: View {
     }
 }
 
+import SwiftUI
+
 private struct VAEndPage: View {
     @ObservedObject var vm: VAViewModel
-    let onAgain: ()->Void
-    let onSubmitTap: ()->Void
+    let onAgain: () -> Void
+    let onSubmitTap: () -> Void
+
     @State private var showingInfo = false
 
     private var canSubmit: Bool {
-        //vm.right.blue != nil && vm.right.white != nil && vm.left.blue != nil && vm.left.white != nil
-        return vm.right.blue != nil && vm.right.white != nil &&
-               vm.left.blue  != nil && vm.left.white  != nil
+        vm.right.blue != nil && vm.right.white != nil &&
+        vm.left.blue  != nil && vm.left.white  != nil
     }
     private var rightDesc: String {
         let b = vm.right.blue.map  { String(format: "蓝 %.1f", $0) } ?? "—"
@@ -698,84 +703,95 @@ private struct VAEndPage: View {
 
     var body: some View {
         ZStack {
-            Color.white   // 界面11：保持白底
+            Color.white.ignoresSafeArea()   // 界面11白底
+
             VStack(spacing: 24) {
-                Color.clear
-                    .frame(height: 120)
-                
+                Spacer().frame(height: 120)
+
                 Image("finished")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 72, height: 72)
-                
-                Text("测试完成").font(.system(size: 42))
-                Color.clear
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(rightDesc)
-                    Text(leftDesc)
+                    .frame(width: 92, height: 92)
+
+                Text("测试完成")
+                    .font(.system(size: 42))
+
+        //        VStack(alignment: .leading, spacing: 8) {
+        //           Text(rightDesc)
+        //            Text(leftDesc)
+        //        } 这段是在测试结束确认界面原本显示测试结果的。注释掉后不知道会否影响最后计算或显示
+
+                Spacer().frame(height: 170)
+
+                // 按钮区（与 5A 风格一致）
+                VStack(spacing: 14) {
+                    GhostPrimaryButton(title: "再测一次") {
+                        onAgain()
+                    }
+                    GlowButton(title: "提交结果", disabled: !canSubmit) {
+                        onSubmitTap()
+                    }
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
 
-                Color.clear
-                    .frame(height: 170)
-                
-                Button("再测一次") {
-                    onAgain()
-                }
-                .font(.system(size: 22, weight: .semibold))    // 只放大文字
-                .frame(height: 20)                             // 固定高度，不随文字增大
-                .padding().frame(maxWidth: .infinity)
-                .background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                // 底部蓝色链接
+                Text("系统是如何通过视力VA计算屈光不正度数？")
+                    .font(.footnote)
+                    .foregroundColor(.blue)
+                    .onTapGesture { showingInfo = true }
+                    .padding(.top, 8)
 
-                Button("提交结果") {
-                    onSubmitTap()
-                }
-                .font(.system(size: 22, weight: .semibold))    // 只放大文字
-                .frame(height: 20)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(canSubmit ? Color.black : Color.gray.opacity(0.4))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .disabled(!canSubmit)
-
-
-                // 新增：底部蓝色链接
-                                Text("系统是如何通过视力VA计算屈光不正度数？")
-                                    .font(.footnote)
-                                    .foregroundColor(.blue)
-                                    .onTapGesture { showingInfo = true }
-                                    .padding(.top, 8)
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, 36)
-                        }
-                        // 弹出说明 Sheet
-                        .sheet(isPresented: $showingInfo) {
-                            NavigationStack {
-                                ScrollView {
-                                    Text("有待加入正式内容")
-                                        .padding()
-                                }
-                                .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
-                                .navigationBarTitleDisplayMode(.inline)
+                Spacer().frame(height: 36)
             }
             .padding(.horizontal, 24)
+        }
+        
+        // ⬇️ 一定把 sheet 挂在某个视图上（这里挂 ZStack）
+        .sheet(isPresented: $showingInfo) {
+            NavigationStack {
+                ScrollView {
+                    Text("有待加入正式内容")
+                        .padding()
+                }
+                .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
+                .navigationBarTitleDisplayMode(.inline)
+            }
         }
     }
 }
 
-
-import SwiftUI
-
-// MARK: — 界面11 Canvas（测试结束确认页）
-/// 对应 VAFlow.swift 中的 private struct VAEndPage {...}
+// MARK: - Canvas（保持不变）
 struct VAEndPage_Canvas: View {
     @ObservedObject var vm: VAViewModel
-    let onAgain:     () -> Void
+    let onAgain: () -> Void
     let onSubmitTap: () -> Void
-
     var body: some View {
-        VAEndPage(vm: vm, onAgain: onAgain, onSubmitTap: onSubmitTap)  // :contentReference[oaicite:0]{index=0}
+        VAEndPage(vm: vm, onAgain: onAgain, onSubmitTap: onSubmitTap)
+    }
+}
+
+// 次行动按钮（5A 风格）
+private struct GhostPrimaryButton: View {
+    let title: String
+    var action: () -> Void
+    var enabled: Bool = true
+    var height: CGFloat = 30
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white.opacity(enabled ? 1 : 0.5))
+                .frame(maxWidth: .infinity, minHeight: height)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(Color.black.opacity(enabled ? 0.80 : 0.40))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 }
 
@@ -900,3 +916,26 @@ fileprivate struct DistanceBarsHUD: View {
         }
     }
 }
+
+
+
+#if DEBUG
+struct VAEndPage_Canvas_Previews: PreviewProvider {
+    static var previews: some View {
+        // 构造一个示例 VM，模拟测试已结束且两眼蓝/白值都有结果
+        let vm = VAViewModel()
+        vm.phase = .end
+        vm.right = .init(blue: 0.1, white: 0.2)
+        vm.left  = .init(blue: 0.15, white: 0.25)
+
+        return VAEndPage_Canvas(
+            vm: vm,
+            onAgain:     { /* noop */ },
+            onSubmitTap: { /* noop */ }
+        )
+        .previewLayout(.sizeThatFits)
+        .previewDisplayName("界面11：测试结束确认")
+        .environmentObject(AppServices())
+    }
+}
+#endif

@@ -1,172 +1,148 @@
 import SwiftUI
 
-/// 5D · 锁定最清晰距离（V2）—— 仅用距离，不测 IPD
+/// 5D · 锁定“最清晰距离”(有测距)
+/// - 语音播报结束后按钮才可点（时长可改）
+/// - 点按钮：记录距离 → 按钮消失 → 显示绿色胶囊“已记录” → 停留 2s 再进入下一步
 struct CYLDistanceV2View: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
-    @StateObject private var pdSvc = FacePDService() // 只用到 distance_m
-    @State private var spin = false
-    @State private var lockPulse = false
-    @State private var successSweep: CGFloat = 0
+    @StateObject private var svc = FacePDService()          // 读 distance_m
+    @State private var didSpeak = false
+    @State private var canTap = false                       // 语音结束前不可点
+    @State private var hasLocked = false                    // 是否已记录
+    @State private var lockedMM: Double? = nil              // 记录下来的 mm
+
+    /// ⏱️ 播报“闸门时间”——语音结束后才允许点按钮（改这里）
+    private let speechGate: TimeInterval = 13.0              // ← 想更晚/更早，改这个数字（秒）
+
+    /// ⏱️ 记录成功后在本页停留多久再跳转（改这里）
+    private let postLockStay: TimeInterval = 2.5            // ← 需求的 2.5 秒
 
     var body: some View {
-        VStack(spacing: 18) {
-            // 标题 & 说明
-            VStack(alignment: .leading, spacing: 6) {
-                Text("锁定最清晰距离").font(ThemeV2.Fonts.title()).foregroundColor(.white)
-                Text("请缓慢前后移动手机，散光盘最清晰时点击“锁定”。")
-                    .font(ThemeV2.Fonts.note())
-                    .foregroundColor(.white.opacity(0.7))
+        VStack(spacing: 20) {
+            Spacer(minLength: 160)
+
+            // 散光盘
+            CylStarVector(color: .black, lineCap: .butt)
+                .frame(width: 320, height: 320)
+
+            Spacer(minLength: 120)
+
+            // （1）实时距离：记录前隐藏；记录后用“绿色胶囊”显示
+            if hasLocked, let mm = lockedMM {
+                InfoBar(tone: .ok, text: String(format: "距离  %.1f mm  ·  已记录", mm))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 8)
 
-            // 圆形舞台
-            ZStack(alignment: .topTrailing) {
-                // 发光外环
-                Circle()
-                    .stroke(LinearGradient(colors: [.blue.opacity(0.35), .cyan.opacity(0.35)],
-                                           startPoint: .leading, endPoint: .trailing), lineWidth: 10)
-                    .blur(radius: 10).opacity(0.8)
-                    .frame(width: 300, height: 300)
-
-                // 散光盘（专业矢量）
-                CylStarVector(spokes: 24, innerRadiusRatio: 0.23,
-                              dashLength: 10, gapLength: 7,
-                              lineWidth: 3, color: .white, holeFill: .black, lineCap: .butt)
-                    .frame(width: 300, height: 300)
-
-                // 右上角旋转环
-                SpinnerRing(spin: $spin).padding(8)
-
-                // 成功扫光
-                SweepArc(head: successSweep, length: 0.22)
-                    .stroke(LinearGradient(colors: [Color.green.opacity(0.95), Color.green.opacity(0.0)],
-                                           startPoint: .leading, endPoint: .trailing), lineWidth: 5)
-                    .frame(width: 320, height: 320)
-                    .blur(radius: 3)
-                    .opacity(successSweep > 0 ? 0.95 : 0)
-                    .blendMode(.plusLighter)
+            // （2）记录按钮：初始淡灰，语音后变深灰；记录后消失
+            if !hasLocked {
+                GhostActionButton(
+                    title: "这个距离实线最清晰",
+                    enabled: canTap,
+                    action: { lockAndNext() }
+                )
+                .transition(.opacity)
             }
-            .padding(.vertical, 4)
-            .overlay( // 暗角
-                RadialGradient(colors: [Color.clear, Color.black.opacity(0.72)],
-                               center: .center, startRadius: 160, endRadius: 600)
-                    .allowsHitTesting(false)
-            )
 
-            // 指标
-            HStack(spacing: 16) {
-                metric(title: "当前距离", value: fmtCM(pdSvc.distance_m), color: .white)
-                Spacer()
-                metric(title: "轴向", value: axisText, color: .white)
-            }
-            .padding(.horizontal, 4)
-
-            // 锁定按钮
-            Button {
-                onLock()
-            } label: {
-                Text("锁定")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(lockPulse ? Color.green : ThemeV2.Colors.brandBlue)
-                            .shadow(color: Color.green.opacity(lockPulse ? 0.6 : 0), radius: 18)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 12)
-
-            Spacer()
+            Spacer(minLength: 20)
             VoiceBar().scaleEffect(0.5)
+            Spacer(minLength: 8)
         }
-        .padding(24)
-        .background(Color.black.ignoresSafeArea())
-        .screenSpeech("请缓慢前后移动手机，散光盘最清晰时点击锁定。")
+        .pagePadding()
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            pdSvc.start(); spin = true
+            svc.start()
+
+            guard !didSpeak else { return }
+            didSpeak = true
+
+            // 播报引导；播报后才允许点击
+            services.speech.stop()
+            services.speech.restartSpeak(
+                "本步骤要记录当您看到黑色实线最清晰时的距离。慢慢前后微调屏幕，找到最清晰时，保持不动，点击按钮。",
+                delay: 0.25
+            )
+            canTap = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + speechGate) {
+                canTap = true
+            }
         }
-        .onDisappear {
-            pdSvc.stop(); spin = false
-        }
+        .onDisappear { svc.stop() }
+        .animation(.easeInOut(duration: 0.2), value: hasLocked)
+        .animation(.easeInOut(duration: 0.2), value: canTap)
     }
 
-    // MARK: - Actions
-    private func onLock() {
-        let d = pdSvc.distance_m ?? 0
-        if eye == .right { state.cylR_clarityDist_mm = d * 1000 }
-        else             { state.cylL_clarityDist_mm = d * 1000 }
+    // MARK: - 记录并跳转
+    private func lockAndNext() {
+        guard canTap else { return }
+        let mmVal = (svc.distance_m ?? 0) * 1000.0
+        lockedMM = mmVal
+        hasLocked = true                               // 显示绿色胶囊，按钮消失
 
-        // 成功动效：按钮脉冲 + 外圈扫光 + 播报 + 延迟跳转
-        lockPulse = true
-        successSweep = 0
-        withAnimation(.linear(duration: 0.9)) { successSweep = 1 }
-        services.speech.speak(String(format: "已记录，距离 %.2f 米。", d))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            lockPulse = false
-            if eye == .right { state.path.append(.cylL_A) }
-            else             { state.path.append(.vaLearn) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { successSweep = 0 }
-        }
-    }
+        services.speech.stop()
+        services.speech.speak(String(format: "距离已记录。", mmVal))
 
-    // MARK: - UI helpers
-    private func metric(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(ThemeV2.Fonts.note()).foregroundColor(.white.opacity(0.7))
-            Text(value).font(ThemeV2.Fonts.mono(20)).foregroundColor(color)
+        // 写入状态机
+        if eye == .right {
+            state.cylR_clarityDist_mm = mmVal
+        } else {
+            state.cylL_clarityDist_mm = mmVal
         }
-    }
-    private var axisText: String {
-        let deg = (eye == .right ? state.cylR_axisDeg : state.cylL_axisDeg) ?? 0
-        return deg == 0 ? "--" : "\(deg)°"
-    }
-    private func fmtCM(_ v: Double?, digits: Int = 2) -> String {
-        guard let v = v else { return "--.-- m" }
-        return String(format: "%0.*f m", digits, v)
+
+        // 停在本页一会儿，再进入下一步（给“成就感”）
+        DispatchQueue.main.asyncAfter(deadline: .now() + postLockStay) {
+            if eye == .right {
+                state.path.append(.cylL_A)     // 右眼完成 → 左眼散光盘 A
+            } else {
+                state.path.append(.vaLearn)    // 左眼完成 → VA 学习
+            }
+        }
     }
 }
 
-// 旋转环 & 扫光（与 PDV2 相同）
-fileprivate struct SpinnerRing: View {
-    @Binding var spin: Bool
+/// 与 5A 同风格的“幽灵主按钮”：enabled 时深灰，不可点时淡灰
+private struct GhostActionButton: View {
+    let title: String
+    let enabled: Bool
+    var action: () -> Void
+
     var body: some View {
-        ZStack {
-            Circle().stroke(Color.white.opacity(0.15), lineWidth: 8)
-            Circle()
-                .trim(from: 0.0, to: 0.66)
-                .stroke(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .animation(spin ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: spin)
+        Button(action: { if enabled { action() } }) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white.opacity(enabled ? 0.95 : 0.6))
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(enabled ? 0.78 : 0.35))
+                )
         }
-        .frame(width: 56, height: 56)
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .animation(.easeInOut(duration: 0.2), value: enabled)
     }
 }
-struct SweepArc: Shape {
-    var head: CGFloat
-    var length: CGFloat
-    var animatableData: CGFloat {
-        get { head }
-        set { head = newValue }
-    }
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let c = CGPoint(x: rect.midX, y: rect.midY)
-        let r = min(rect.width, rect.height) / 2
-        let startA = max(0.0, Double(head - length)) * 2 * .pi - .pi/2
-        let endA   = Double(head) * 2 * .pi - .pi/2
-        p.addArc(center: c, radius: r, startAngle: .radians(startA), endAngle: .radians(endA), clockwise: false)
-        return p
+
+#if DEBUG
+struct CYLDistanceV2View_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            CYLDistanceV2View(eye: .right)
+                .environmentObject(AppState())
+                .environmentObject(AppServices())
+                .previewDisplayName("Distance · R")
+                .previewDevice("iPhone 15 Pro")
+
+            CYLDistanceV2View(eye: .left)
+                .environmentObject(AppState())
+                .environmentObject(AppServices())
+                .preferredColorScheme(.dark)
+                .previewDisplayName("Distance · L · Dark")
+                .previewDevice("iPhone 15 Pro")
+        }
     }
 }
+#endif
