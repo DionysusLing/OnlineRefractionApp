@@ -5,22 +5,26 @@ struct StartupV2View: View {
     @EnvironmentObject var services: AppServices
     var onStart: () -> Void
     init(onStart: @escaping () -> Void = {}) { self.onStart = onStart }
+
+    // 首次安装：是否已经看过引导（独立于老版本的 key，互不干扰）
+    @AppStorage("hasSeenOnboardingV2") private var hasSeenOnboardingV2 = false
+    @State private var showOnboarding = false
+
+    // 头图/动画
     @State private var animateLogo = false
     @State private var showTitle = false
     @State private var showFooter = false
 
     @State private var speakOn = true
-    /// 打开即可：语音播报后 +1s 自动进入 TypeCode
+    /// 语音播完 +1s 自动进入 TypeCode（保持你的旧逻辑）
     private let autoJump = true
-
-    /// 头图高度（与 TypeCode 对齐，可调 120~340）
     private let headerH: CGFloat = 180
 
     var body: some View {
         ZStack(alignment: .top) {
             ThemeV2.Colors.page.ignoresSafeArea()
 
-            // 顶部蓝色头图（无副标题、无进度）
+            // 顶部蓝底（无副标题、无进度）
             V2BlueHeader(title: "", subtitle: nil, progress: nil)
                 .frame(height: headerH)
                 .frame(maxWidth: .infinity)
@@ -29,37 +33,30 @@ struct StartupV2View: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
                     Color.clear.frame(height: headerH * 0.28)
+
+                    // Logo + 标题 + 脚注（一次性入场动画）
                     VStack(spacing: 18) {
-                        // 1) Logo：一次性动画，不循环
                         HStack {
                             Spacer()
                             Image("startupLogo")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 250, height: 250)
-                            
-                                .scaleEffect(animateLogo ? 1.0 : 0.92)            // 由 92% → 100%
-                                .rotationEffect(.degrees(animateLogo ? 0 : -6))    // 由 -6° → 0°
-                                .opacity(animateLogo ? 1 : 0)                      // 渐入
+                                .scaleEffect(animateLogo ? 1.0 : 0.92)
+                                .rotationEffect(.degrees(animateLogo ? 0 : -6))
+                                .opacity(animateLogo ? 1 : 0)
                                 .onAppear {
-                                    withAnimation(.easeOut(duration: 0.90)) {
-                                        animateLogo = true
-                                    }
-                                    // 依次触发标题/脚注
+                                    withAnimation(.easeOut(duration: 0.90)) { animateLogo = true }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.90) {
-                                        withAnimation(.easeOut(duration: 0.40)) {
-                                            showTitle = true
-                                        }
+                                        withAnimation(.easeOut(duration: 0.40)) { showTitle = true }
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.90 + 0.25) {
-                                            withAnimation(.easeOut(duration: 0.35)) {
-                                                showFooter = true
-                                            }
+                                            withAnimation(.easeOut(duration: 0.35)) { showFooter = true }
                                         }
                                     }
                                 }
                             Spacer()
                         }
-                        // 2) 标题：淡入 + 轻微上移（一次性）
+
                         Text("线上验光")
                             .font(.system(size: 48, weight: .regular))
                             .foregroundColor(ThemeV2.Colors.text)
@@ -68,7 +65,6 @@ struct StartupV2View: View {
                             .opacity(showTitle ? 1 : 0)
                             .offset(y: showTitle ? 0 : 8)
 
-                        // 3) 法务/专利脚注：淡入 + 轻微上移（一次性）
                         Text("""
                         本App的发明专利公布号：CN120391991A
                         Power by 眼视觉仿真超级引擎
@@ -76,25 +72,25 @@ struct StartupV2View: View {
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(ThemeV2.Colors.subtext)
                         .multilineTextAlignment(.center)
-                        .lineSpacing(8) // 行距，数值可调，小一点更紧凑
+                        .lineSpacing(6)
                         .padding(.horizontal, 24)
                         .opacity(showFooter ? 1 : 0)
                         .offset(y: showFooter ? 0 : 6)
                     }
                     .padding(.top, 4)
 
-                    
                     Color.clear.frame(height: 150)
-                    // 开始按钮（如需完全自动进入，可注释掉）
+
+                    // 如需保留“开始验光”按钮可留着；完全自动进入就无视它
                     GlowButton(title: "开始验光") { onStart() }
                         .padding(.horizontal, 24)
                         .padding(.top, 6)
-                    
+
                     Color.clear.frame(height: 2)
-                    // 语音开关
+
                     Button {
                         speakOn.toggle()
-                        // 如要联动服务：services.speech.setEnabled(speakOn)
+                        // 如需联动：services.speech.setEnabled(speakOn)
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: speakOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
@@ -114,35 +110,129 @@ struct StartupV2View: View {
                 .padding(.bottom, 24)
             }
         }
-        // 播报一句欢迎词；播报完成 +1s 自动跳转
-        .screenSpeech("欢迎使用线上验光。")
+        // —— 首次进入：先弹引导；看完才播欢迎词 & 自动跳转 ——
         .onAppear {
-            guard autoJump else { return }
-            let estimated: TimeInterval = 5.6
-            let delay: TimeInterval = estimated + 1.0
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                onStart()
+            if !hasSeenOnboardingV2 {
+                showOnboarding = true
+            } else {
+                startFlowIfNeeded()
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingV2View {
+                // 结束引导：标记已看过 & 回到本页，开始正常 Startup 流程
+                hasSeenOnboardingV2 = true
+                showOnboarding = false
+                // 小延时避免 cover 关闭动画与语音抢占
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    startFlowIfNeeded()
+                }
+            }
+        }
+    }
+
+    // 统一控制：欢迎语 + 自动跳转
+    private func startFlowIfNeeded() {
+        // 你的原文案，这里不动它
+        services.speech.restartSpeak("欢迎使用线上验光。", delay: 0.0)
+        guard autoJump else { return }
+        // 保守估算中文 TTS 时长 + 1s
+        let estimated: TimeInterval = 2.6
+        let delay: TimeInterval = estimated + 1.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            onStart()
+        }
+    }
+}
+
+// MARK: - 引导页（3 张图 + 幽灵页自动收尾）
+private struct OnboardingV2View: View {
+    struct Page: Identifiable {
+        let id = UUID()
+        let image: String
+    }
+    private let pages: [Page] = [
+        .init(image: "slider1"),
+        .init(image: "slider2"),
+        .init(image: "slider3"),
+    ]
+
+    @State private var index = 0
+    let onDone: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                TabView(selection: $index) {
+                    // 0..pages.count：最后一页是“幽灵页”
+                    ForEach(0...pages.count, id: \.self) { i in
+                        Group {
+                            if i < pages.count {
+                                VStack {
+                                    Spacer(minLength: 12)
+                                    Image(pages[i].image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .padding(.horizontal, 16)
+                                    Spacer(minLength: 12)
+                                }
+                                .transition(.opacity)
+                            } else {
+                                // 幽灵页：一滑到就结束
+                                Color.clear
+                                    .onAppear {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            onDone()
+                                        }
+                                    }
+                            }
+                        }
+                        .tag(i)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never)) // 隐藏系统页码点
+
+                // 自定义 3 个页码点（和 UI2 氛围统一）
+                PageDotsV2(current: min(index, pages.count - 1), count: pages.count)
+                    .padding(.bottom, 24)
+            }
+        }
+        .interactiveDismissDisabled(true)
+    }
+}
+
+private struct PageDotsV2: View {
+    let current: Int
+    let count: Int
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<count, id: \.self) { i in
+                Circle()
+                    .fill(i == current ? ThemeV2.Colors.text : ThemeV2.Colors.subtext.opacity(0.35))
+                    .frame(width: 8, height: 8)
             }
         }
     }
 }
 
-// MARK: - Startup Preview
+// MARK: - 预览
 #if DEBUG
 struct StartupV2View_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            StartupV2View(onStart: {}) // 预览中不自动跳转
+            StartupV2View(onStart: {})
                 .environmentObject(AppServices())
                 .environmentObject(AppState())
-                .previewDisplayName("Startup · Light")
+                .previewDisplayName("StartupV2 · Light")
                 .previewDevice("iPhone 15 Pro")
 
             StartupV2View(onStart: {})
                 .environmentObject(AppServices())
                 .environmentObject(AppState())
                 .preferredColorScheme(.dark)
-                .previewDisplayName("Startup · Dark")
+                .previewDisplayName("StartupV2 · Dark")
                 .previewDevice("iPhone 15 Pro")
         }
     }

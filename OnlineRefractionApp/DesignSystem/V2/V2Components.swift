@@ -8,27 +8,47 @@ public struct GlowButton: View {
     public var title: String
     public var disabled: Bool = false
     public var action: () -> Void
+    @State private var pressed = false
+
     public init(title: String, disabled: Bool = false, action: @escaping () -> Void) {
-        self.title = title; self.disabled = disabled; self.action = action
+        self.title = title
+        self.disabled = disabled
+        self.action = action
     }
+
     public var body: some View {
-        Button(action: action) {
+        let press = DragGesture(minimumDistance: 0)
+            .onChanged { _ in if !pressed && !disabled { pressed = true } }
+            .onEnded   { _ in pressed = false }
+
+        return Button(action: { if !disabled { action() } }) {
             Text(title)
                 .font(ThemeV2.Fonts.h1())
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
                 .background(
-                    LinearGradient(colors: [ThemeV2.Colors.brandBlue, ThemeV2.Colors.brandCyan], startPoint: .leading, endPoint: .trailing)
+                    LinearGradient(colors: [ThemeV2.Colors.brandBlue, ThemeV2.Colors.brandCyan],
+                                   startPoint: .leading, endPoint: .trailing)
                         .opacity(disabled ? 0.4 : 1)
                 )
                 .cornerRadius(20)
                 .shadow(color: ThemeV2.Colors.brandBlue.opacity(0.35), radius: 16, x: 0, y: 10)
+                // 瞬时变暗覆盖层（无动画）
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.black.opacity(pressed && !disabled ? 0.22 : 0))
+                        .allowsHitTesting(false)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 20))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlowPressStyle(cornerRadius: 20, pressedOpacity: 0.20, disabled: disabled))
         .disabled(disabled)
+        .simultaneousGesture(press)     // ⬅️ 立刻响应按压高亮
+        .animation(nil, value: pressed) // 明确禁用动画，瞬时变化
     }
 }
+
 
 public struct ChipToggle: View {
     public var label: String
