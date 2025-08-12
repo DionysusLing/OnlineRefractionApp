@@ -138,7 +138,10 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
 
     enum Phase { case learn, distance, blueRight, blueLeft, whiteRight, whiteLeft, end }
     enum Theme { case blue, white }
-    enum Eye   { case right, left }
+    // OnlineRefractionApp/Models/Eye.swift  （或 RoutesAModels.swift）
+    public enum Eye: String, CaseIterable, Codable, Hashable {
+        case right, left
+    }
     enum Dir: CaseIterable { case up, down, left, right }
 
     // UI

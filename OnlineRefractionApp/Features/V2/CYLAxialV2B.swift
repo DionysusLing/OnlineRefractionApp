@@ -5,15 +5,15 @@ struct CYLAxialV2B: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
-
+    
     @State private var didSpeak = false
     @State private var selectedMark: Double? = nil   // 1…12 或 0.5、1.5、…、11.5
     @State private var axisPicked: Int? = nil        // 1..12
-
+    
     var body: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 138)
-
+            
             // 散光盘 + 数字环
             ZStack {
                 // 专业矢量散光盘（选中后整体淡出一些）
@@ -22,11 +22,11 @@ struct CYLAxialV2B: View {
                               lineWidth: 3,
                               color: (selectedMark == nil ? .black : .black.opacity(0.60)),
                               holeFill: .white, lineCap: .butt)
-                    .frame(height: 300)
-                    .opacity(1.0)
-                    .blur(radius: selectedMark == nil ? 0 : 4.0)
-                    .allowsHitTesting(false)
-
+                .frame(height: 300)
+                .opacity(1.0)
+                .blur(radius: selectedMark == nil ? 0 : 4.0)
+                .allowsHitTesting(false)
+                
                 // 数字 + 高亮两段黑实线
                 GeometryReader { geo in
                     let size      = geo.size
@@ -37,14 +37,14 @@ struct CYLAxialV2B: View {
                     let smallFont = bigFont * 0.5
                     let hitBig:  CGFloat = 44
                     let hitHalf: CGFloat = 34
-
+                    
                     // 半刻度：0.5, 1.5, …, 11.5
                     ForEach(Array(stride(from: 0.5, through: 11.5, by: 1.0)), id: \.self) { v in
                         let a = (3.0 - v) * .pi / 6.0
                         let x = cx + cos(a) * r
                         let y = cy - sin(a) * r
                         let picked = isHighlighted(v)
-
+                        
                         Text(String(format: "%.1f", v))
                             .font(.system(size: smallFont, weight: .semibold))
                             .foregroundColor(picked ? .green : .primary)
@@ -52,13 +52,13 @@ struct CYLAxialV2B: View {
                             .contentShape(Circle())
                             .position(x: x, y: y)
                             .zIndex(2)
-                            // 选中后其余数字淡出+轻模糊
+                        // 选中后其余数字淡出+轻模糊
                             .opacity(selectedMark == nil ? 1.0 : (picked ? 1.0 : 0.6))
                             .opacity(1.0)
                             .blur(radius: selectedMark == nil ? 0.0 : (picked ? 0.0 : 4.0))  // ← 模糊大很多
                             .onTapGesture { select(v) }
                     }
-
+                    
                     // 整点：1…12
                     ForEach(1...12, id: \.self) { n in
                         let v = Double(n)
@@ -66,7 +66,7 @@ struct CYLAxialV2B: View {
                         let x = cx + cos(a) * r
                         let y = cy - sin(a) * r
                         let picked = isHighlighted(v)
-
+                        
                         Text("\(n)")
                             .font(.system(size: bigFont, weight: .semibold))
                             .foregroundColor(picked ? .green : .primary)
@@ -78,24 +78,24 @@ struct CYLAxialV2B: View {
                             .blur(radius: selectedMark == nil ? 0.0 : (picked ? 0.0 : 4.0))
                             .onTapGesture { select(v) }
                     }
-
+                    
                     // === 两段黑色实线（长度对齐散光盘虚线） ===
                     if let v = selectedMark {
                         // 12 在正上方：与 CylStarVector 的参数保持一致
                         let a1 = angleForMark(v)
                         let a2 = angleForMark(opposite(of: v))
-
+                        
                         // 与 CylStarVector(spokes:24, innerRadiusRatio:0.23, ...) 对齐
                         let inner = r * 0.23        // 起点：与虚线内端一致
                         let outer = r * 0.84        // 终点：靠近外缘
                         let stroke = StrokeStyle(lineWidth: 4, lineCap: .round)
-
+                        
                         SolidSpokeSegment(center: CGPoint(x: cx, y: cy), r1: inner, r2: outer, angle: a1)
                             .stroke(Color.gray, style: stroke)
                             .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
                             .zIndex(0)
                             .allowsHitTesting(false)
-
+                        
                         SolidSpokeSegment(center: CGPoint(x: cx, y: cy), r1: inner, r2: outer, angle: a2)
                             .stroke(Color.gray, style: stroke)
                             .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
@@ -105,7 +105,7 @@ struct CYLAxialV2B: View {
                 }
             }
             .frame(height: 360)
-
+            
             // 底部回显：a—b（本点与对向点）
             ZStack {
                 if let v = selectedMark {
@@ -121,7 +121,7 @@ struct CYLAxialV2B: View {
             }
             .frame(height: 80)
             .animation(.easeInOut(duration: 0.18), value: selectedMark)
-
+            
             if let v = selectedMark {
                 // 也可以把文字改成 “轴向 6—12 已记录” 或 “轴向 90° 已记录”
                 GreenBadge(text: "\(display(v))—\(display(opposite(of: v)))  已记录")
@@ -136,8 +136,8 @@ struct CYLAxialV2B: View {
                         .foregroundColor(.gray)
                 }
             }
-
-
+            
+            
             Spacer(minLength: 100)
             VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 12)
@@ -151,7 +151,7 @@ struct CYLAxialV2B: View {
             services.speech.restartSpeak("请点击散光盘上与清晰黑色实线方向最靠近的数字。", delay: 0.35)
         }
     }
-
+    
     // MARK: - 交互
     private func select(_ v: Double) {
         selectedMark = v
@@ -159,7 +159,7 @@ struct CYLAxialV2B: View {
         let rounded = (v == 12.0) ? 12 : Int(round(v))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onPick(rounded) }
     }
-
+    
     /// 本点与对向点一起高亮
     private func isHighlighted(_ v: Double) -> Bool {
         guard let s = selectedMark else { return false }
@@ -176,7 +176,7 @@ struct CYLAxialV2B: View {
     private func angleForMark(_ v: Double) -> Angle {
         Angle(radians: (3.0 - v) * .pi / 6.0) // 12 在正上方
     }
-
+    
     // MARK: - 记录并进入锁距（与原逻辑一致）
     private func onPick(_ clock: Int) {
         let axis = (clock == 12 ? 180 : clock * 15)
@@ -189,11 +189,25 @@ struct CYLAxialV2B: View {
         }
         services.speech.stop()
         services.speech.speak("已记录。")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            state.path.append(eye == .right ? .cylR_D : .cylL_D)
+        // ✅ 关键：根据“快速流程回跳标记”决定去向；否则按主流程走 5D
+        let shouldReturnToLeftFastCYL  = (eye == .right && state.fastPendingReturnToLeftCYL)
+        let shouldReturnToFastResult   = (eye == .left  && state.fastPendingReturnToResult)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            if shouldReturnToLeftFastCYL {
+                // 清标记，回“快速散光 · 左眼”
+                state.fastPendingReturnToLeftCYL = false
+                state.path = [.fastCYL(.left)]
+            } else if shouldReturnToFastResult {
+                // 清标记，回“快速结果页”
+                state.fastPendingReturnToResult = false
+                state.path = [.fastResult]
+            } else {
+                // 走主流程：进入 5D 锁距
+                state.path.append(eye == .right ? .cylR_D : .cylL_D)
+            }
         }
-    }
-}
+    }}
 
 // 高亮用：在某一轴上画“外环的一段实线”
 private struct SolidSpokeSegment: Shape {

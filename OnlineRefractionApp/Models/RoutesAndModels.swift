@@ -1,7 +1,9 @@
 import Foundation
 
 // 基本枚举
-enum Eye { case left, right }
+public enum Eye: String, CaseIterable, Codable, Hashable {
+    case right, left
+}
 enum CylStep { case A, B }            // A: 是否有清晰实线；B: 点击数字得轴向
 enum VABackground { case blue, white }
 
