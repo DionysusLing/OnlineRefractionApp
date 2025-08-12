@@ -1,419 +1,8 @@
+// Features/V1/Screens.swift  （瘦身版）
 import SwiftUI
 import Photos
 
-// MARK: - 1. StartUp（含首次启动引导）
-struct StartupView: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var services: AppServices
-
-    // 是否看过引导页（首次安装为 false）
-    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
-    @State private var showOnboarding = false
-
-    var body: some View {
-        VStack {
-            Spacer()
-            Image(Asset.startupLogo)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 220)
-
-            Spacer()
-
-            VoiceBar()
-                .scaleEffect(0.5)
-            
-            Text("本App的发明专利公布号：CN120391991A")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-            
-            Text("Power by 眼视光仿真超级引擎")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-            Color.clear
-                .frame(height: 10)
-        }
-        .onAppear {
-            // 首次进入显示引导；否则直接走原有流程
-            if hasSeenOnboarding {
-                startStartupFlow()
-            } else {
-                showOnboarding = true
-            }
-        }
-        .fullScreenCover(isPresented: $showOnboarding) {
-            OnboardingView {
-                hasSeenOnboarding = true
-                showOnboarding = false
-                startStartupFlow()
-            }
-        }
-        .navigationBarBackButtonHidden()
-    }
-
-    private func startStartupFlow() {
-        services.speech.speak("欢迎使用线上验光")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            state.path.append(.typeCode)
-        }
-    }
-}
-
-// MARK: - Onboarding (3 slides)
-struct OnboardingView: View {
-    struct Page: Identifiable {
-        let id = UUID()
-        let image: String
-        let title: String
-        let subtitle: String
-    }
-
-    private let pages: [Page] = [
-        .init(image: "slider1", title: "亚毫米级精度瞳距测量", subtitle: "误差媲美医用仪器"),
-        .init(image: "slider2", title: "最前沿的散光量化算法", subtitle: "优于哈佛医学院方法"),
-        .init(image: "slider3", title: "个体离焦曲线斜率求解", subtitle: "原研空间频率等效球镜模型")
-    ]
-
-    @State private var index = 0
-    let onDone: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-
-            VStack(spacing: 16) {
-                // 1) TabView：多加一个“幽灵页”= pages.count
-                TabView(selection: $index) {
-                    ForEach(0...pages.count, id: \.self) { i in
-                        Group {
-                            if i < pages.count {
-                                // 正常 3 页
-                                VStack {
-                                    Spacer(minLength: 12)
-                                    Image(pages[i].image)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .padding(.horizontal, 16)
-                                    Spacer(minLength: 12)
-                                }
-                            } else {
-                                // 幽灵页：一滑到就结束
-                                Color.clear
-                                    .onAppear {
-                                        // 小延时避免和切换动画竞争
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                            onDone()
-                                        }
-                                    }
-                            }
-                        }
-                        .tag(i)
-                    }
-                }
-                // 2) 隐藏系统自带页码点（否则会显示 4 个）
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                // 3) 自定义 3 个圆点
-                PageDots(current: min(index, pages.count - 1),
-                         count: pages.count)
-                .padding(.bottom, 24)
-            }
-        }
-        .interactiveDismissDisabled(true)
-    }
-}
-
-// 自定义页码点
-private struct PageDots: View {
-    let current: Int
-    let count: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<count, id: \.self) { i in
-                Circle()
-                    .fill(i == current ? Color.black : Color.gray.opacity(0.35))
-                    .frame(width: 8, height: 8)
-            }
-        }
-    }
-}
-
-
-
-// MARK: - 2. Type & Code
-
-import SwiftUI
-
-struct TypeCodeView: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var services: AppServices
-
-    // 状态（默认勾选）
-    @State private var ageOK = true
-    @State private var myopiaOnly = true
-    @State private var code = ""
-    @State private var agreed = true
-    @State private var showingService = false
-    @State private var showingPrivacy = false
-    @State private var didAdvance = false
-
-    // 必须：三项勾选 + 邀请码 == "0000"（且为4位数字）
-    private var canProceed: Bool {
-        let trimmed = code.trimmingCharacters(in: .whitespaces)
-        return ageOK
-        && myopiaOnly
-        && agreed
-        && trimmed == "0000"
-        && trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    
-                    Color.clear.frame(height: 30)
-                    
-                    // 顶部插画
-                    Image("mainpic")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width:240, height: 240)
-                    Color.clear.frame(height: 30)
-
-                    // 内容卡片
-                    VStack(spacing: 14) {
-
-                        CheckRow(
-                            icon: Image(Asset.icoAge),
-                            title: "我的年龄在 16–50 岁间",
-                            checked: ageOK
-                        ) {
-                            ageOK.toggle(); tryProceed()
-                        }
-
-                        CheckRow(
-                            icon: Image(Asset.icoMyopia),
-                            title: "我是近视，不是远视",
-                            checked: myopiaOnly
-                        ) {
-                            myopiaOnly.toggle(); tryProceed()
-                        }
-
-                        // 邀请码（必填且必须 0000 才能进入）
-                        VStack(alignment: .leading, spacing: 8) {
-                            Color.clear.frame(height: 16)
-                         //   Text("邀请码")
-                         //       .font(.footnote)
-                         //       .foregroundColor(.secondary)
-
-                            TextField("点击这里输入或粘贴邀请码", text: $code)
-                                .keyboardType(.numberPad)
-                                .textInputAutocapitalization(.never)
-                                .submitLabel(.done)
-                                .onSubmit { tryProceed() }
-                                .padding(.horizontal, 12)
-                                .frame(height: 52)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.22), lineWidth: 1)
-                                )
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(UIColor.systemGroupedBackground))
-                    )
-                    .padding(.horizontal, 20)
-
-                    Color.clear.frame(height: 90)
-                    // 协议
-                    HStack(spacing: 8) {
-                        Image(agreed ? Asset.chChecked : Asset.chUnchecked)
-                            .renderingMode(.template)
-                            .resizable()
-                            .frame(width: 18, height: 18)
-                            .foregroundColor(agreed ? .blue : .gray)
-                            .onTapGesture { agreed.toggle(); tryProceed() }
-
-                        Text("已阅读并同意")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-
-                        Button("服务协议") { showingService = true }
-                            .font(.footnote)
-
-                        Text("和")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-
-                        Button("隐私条款") { showingPrivacy = true }
-                            .font(.footnote)
-                    }
-                    .padding(.horizontal, 24)
-
-                    Spacer(minLength: 16)
-                }
-                .padding(.bottom, 40) // 给底部语音条预留空间
-            }
-            .background(Color.white.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                VoiceBar()
-                    .scaleEffect(0.5)
-                    .padding(.vertical, 8)
-                    .padding(.bottom, -36) // ⬅️ +上-下移 xxpt
-
-            }
-        }
-        .onAppear {
-            // 保持原有语音逻辑
-            services.speech.restartSpeak(
-                "请确认年龄与验光类型，同意服务协议。输入邀请码后自动进入下一步。",
-                delay: 0.2
-            )
-        }
-        .onChangeCompat(code) { _, _ in
-            tryProceed()
-        }
-
-        // 协议弹层
-        .sheet(isPresented: $showingService) {
-            NavigationStack {
-                ScrollView {
-                    Text(serviceAgreementText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle("服务协议")
-                .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-        .sheet(isPresented: $showingPrivacy) {
-            NavigationStack {
-                ScrollView {
-                    Text(privacyPolicyText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle("隐私条款")
-                .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-    }
-
-    private func tryProceed() {
-        guard canProceed, !didAdvance else { return }
-        didAdvance = true
-        DispatchQueue.main.async { state.path.append(.checklist) }
-    }
-
-    // MARK: - 协议正文（占位）
-    private let serviceAgreementText = """
-            欢迎您使用“在线验光”应用（以下简称“本应用”）。在开始使用本应用前，请您务必仔细阅读并充分理解本《用户条款》。您使用本应用即视为接受并同意遵守本条款的全部内容。
-
-            一、服务内容
-            本应用基于手机前置摄像头、传感器及相关算法，为用户提供在线视力检测与验光服务，包括但不限于球镜、柱镜和散光轴位检测功能。本应用不代替专业眼科检查，仅供日常自测和参考。
-
-            二、用户资格与义务
-
-            用户应为具有完全民事行为能力的自然人或法人。未满18周岁的未成年人，应在监护人指导下使用。
-            用户应保证提供的信息真实、准确、完整，并对所填信息的合法性和安全性负责。
-            用户应合理使用本应用，不得利用本应用实施任何违法或有损他人合法权益的行为。
-
-            三、隐私与数据保护
-
-            本应用会根据功能需要，收集用户在测试过程中的摄像头数据、测距信息和测试结果，并在本地或云端进行加密存储。
-            我们承诺不将用户个人数据用于本条款约定之外的用途，未经用户同意，不会向第三方出售或提供。
-            用户可以随时在“设置”中删除本地测试记录。如需彻底删除云端数据，请联系客服。
-
-            四、知识产权
-            本应用及其各项功能、界面设计、算法模型、源代码和相关文档等，均受著作权法和相关法律保护。未经授权，任何个人或组织不得擅自复制、修改、发布、传播或用于商业用途。
-
-            五、免责声明
-
-            本应用提供的测试结果仅供参考，不能替代专业眼科诊断。如测试结果提示异常或存在视力问题，请及时就医。
-            因网络、设备或系统等原因，可能导致测试中断或数据误差，我们对此类情况不承担任何责任。
-            对于因使用或无法使用本应用而导致的任何直接或间接损失，我们在法律允许的范围内免责。
-
-            六、条款修改与终止
-
-            本应用保留随时修改、更新本条款的权利，并在应用内公告更新内容，不另行单独通知。
-            若您不同意修改后的条款，应立即停止使用本应用。继续使用即视为接受修改。
-            如用户严重违反本条款，本应用有权终止或限制其使用权限。
-
-            七、适用法律与争议解决
-            本条款的订立、生效、解释和履行均适用中华人民共和国法律。如发生争议，双方应友好协商；协商不成时，可向本应用所在地有管辖权的人民法院提起诉讼。
-
-            八、其他
-            本条款构成您与本应用之间关于使用服务的完整协议。如本条款中的任何条款被认定为无效或不可执行，不影响其他条款的效力。
-
-            感谢您的使用，祝您体验愉快！
-            """
-
-            private let privacyPolicyText = """
-            我们非常重视您的隐私。本隐私政策说明我们如何收集、使用和保护您的信息：
-
-            1. 信息收集
-            在使用本服务过程中，我们可能收集设备信息、操作日志及您主动提供的数据。
-
-            2. 信息使用
-            这些信息仅用于改进服务体验和保障功能正常运行，不会用于未获授权的目的。
-
-            3. 信息共享
-            除非法律法规要求或得到您的明确同意，我们不会向第三方分享您的个人信息。
-
-            4. 信息安全
-            我们采取合理的安全措施保护您的信息，防止未经授权的访问、披露或破坏。
-
-            5. 权益保障
-            您有权查询、更正或删除个人信息。如对本政策有疑问，请通过应用内方式联系我们。
-
-            6. 政策更新
-            本政策可能适时修订，更新后将在应用中公布。继续使用即表示您同意最新政策。
-            """
-}
-
-// MARK: - 统一的勾选行组件
-private struct CheckRow: View {
-    let icon: Image
-    let title: String
-    var checked: Bool
-    var onTap: () -> Void
-
-    var body: some View {
-        HStack(spacing: 14) {
-            icon.resizable().frame(width: 28, height: 28)
-            Text(title)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(.primary)
-            Spacer()
-            Image(Asset.chChecked)
-                .renderingMode(.template)
-                .resizable()
-                .frame(width: 22, height: 22)
-                .foregroundColor(checked ? .blue : .gray.opacity(0.5))
-                .onTapGesture { onTap() }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(checked ? Color.blue.opacity(0.25) : Color.gray.opacity(0.18), lineWidth: 1)
-                )
-        )
-    }
-}
-
-
 // MARK: - 3. Checklist（兼容从设置返回 / 旧机型）
-
 struct ChecklistView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
@@ -424,19 +13,16 @@ struct ChecklistView: View {
     @State private var didAdvance = false
 
     // 弹窗
-    @State private var showGuide = false          // 说明如何去设置页
-    @State private var askConfirm = false         // 回来后询问是否已关闭
+    @State private var showGuide = false
+    @State private var askConfirm = false
 
-    // —— 用于“去设置页后返回” 的持久化标记（避免返回时被系统杀进程还原到启动页）
     @AppStorage("resumeFromSettings") private var resumeFromSettings = false
     @AppStorage("needConfirmAutoBrightness") private var needConfirmAutoBrightness = false
 
-    // 资源与文案
     private let icons: [String] = [
         Asset.icoTripod, Asset.icoBrightOffice, Asset.icoEqualLight, Asset.icoAutoBrightness,
         Asset.icoAlcohol, Asset.icoSunEye, Asset.icoSports, Asset.icoEye
     ]
-    
     private let titles: [String] = [
         "有可竖直固定手机的支架/装置",
         "在“明亮办公室”的安静室内环境",
@@ -452,43 +38,30 @@ struct ChecklistView: View {
         VStack(spacing: 14) {
             Color.clear.frame(height: 40)
             ForEach(0..<titles.count, id: \.self) { i in
-                ChecklistRow(
-                    icon: icons[i],
-                    title: titles[i],
-                    checked: items[i]
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if i == 3 {
-                        // 第4项“自动亮度”：先说明，再跳系统设置
-                        showGuide = true
-                    } else {
-                        items[i].toggle()
+                ChecklistRow(icon: icons[i], title: titles[i], checked: items[i])
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if i == 4 - 1 { // 第 4 项（自动亮度）
+                            showGuide = true
+                        } else {
+                            items[i].toggle()
+                        }
                     }
-                }
             }
-
             Spacer()
-
             VoiceBar().scaleEffect(0.5)
         }
         .pagePadding()
         .onAppear {
-            // 回到本页时检查是否需要继续“已关闭自动亮度？”的确认
             if resumeFromSettings, needConfirmAutoBrightness {
-                // 等 0.3s 给系统动画时间，避免同时弹多个 UI
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    askConfirm = true
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { askConfirm = true }
             }
-            // 首次进入的语音
             services.speech.restartSpeak(
                 "请逐条确认以下条件。第四项需要在设置里关闭自动亮度。全部打勾后将自动进入下一步。",
                 delay: 0.60
             )
         }
         .onChange(of: scenePhase) { phase, _ in
-            // 从“设置”回到 App 时也再检查一次
             if phase == .active, resumeFromSettings, needConfirmAutoBrightness {
                 askConfirm = true
             }
@@ -497,17 +70,15 @@ struct ChecklistView: View {
             guard !didAdvance, newValue.allSatisfy({ $0 }) else { return }
             didAdvance = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                state.path.append(.pd1)
+                state.path.append(.pd1) // 路由仍然进入 PDv2（在 AppRouter 内）
             }
         }
 
         // 说明弹窗 -> 去设置
         .alert("如何关闭“自动亮度”", isPresented: $showGuide) {
             Button("前往设置") {
-                // 1) 标记：回来后需要确认
                 resumeFromSettings = true
                 needConfirmAutoBrightness = true
-                // 2) 跳系统设置
                 openAppSettings()
             }
             Button("我再看看", role: .cancel) {}
@@ -519,13 +90,10 @@ struct ChecklistView: View {
         .confirmationDialog("已关闭“自动亮度”吗？", isPresented: $askConfirm, titleVisibility: .visible) {
             Button("已关闭") {
                 items[3] = true
-                // 清理标记
                 needConfirmAutoBrightness = false
                 resumeFromSettings = false
             }
-            Button("还没有", role: .cancel) {
-                // 继续保留标记，方便再次回到 App 继续询问
-            }
+            Button("还没有", role: .cancel) {}
         }
     }
 
@@ -536,7 +104,7 @@ struct ChecklistView: View {
     }
 }
 
-/// 单行行视图，降低 type-check 复杂度
+/// 单行行视图
 private struct ChecklistRow: View {
     let icon: String
     let title: String
@@ -545,268 +113,46 @@ private struct ChecklistRow: View {
     var body: some View {
         HStack(spacing: 12) {
             SafeImage(icon, size: .init(width: 32, height: 32))
-            Text(title)
-                .layoutPriority(1)
-                .fixedSize(horizontal: true, vertical: false)
+            Text(title).layoutPriority(1).fixedSize(horizontal: true, vertical: false)
             Spacer()
             SafeImage(checked ? Asset.chUnchecked : Asset.chChecked,
                       size: .init(width: 20, height: 20))
         }
-        .padding(.vertical, 14)              // 上下留 14
-        .padding(.leading, 14)               // 左侧留 14
-        .padding(.trailing, 14)              // 右侧留 14
+        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
         .background(Color(white: 0.95))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
-
-
-
-
-
-// MARK: - 4. PD 1/2/3（仅第一次播报；无“完成”播报）
-struct PDView: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var services: AppServices
-
-    let index: Int
-    @StateObject private var pdSvc = FacePDService()
-
-    @State private var isCapturing = false
-    @State private var retryCount = 0
-    @State private var hasSpokenIntro = false
-    @State private var didHighlight = false
-
-    // px → pt（直径 800px、距顶部 512px）
-    private var scale: CGFloat { UIScreen.main.scale }
-    private var circleDiameterPt: CGFloat { 800.0 / scale }
-    private var circleTopOffsetPt: CGFloat { 512.0 / scale }
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                // 圆形取景
-                let small = circleDiameterPt * 1.0   // 100%
-                let diameter = circleDiameterPt
-
-                FacePreviewView(arSession: pdSvc.arSession)
-                    .clipShape(Circle())
-                    .frame(width: diameter, height: diameter)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(Color.green, lineWidth: 10)
-                            .opacity(didHighlight ? 1 : 0)
-                    )
-                    .position(
-                        x: geo.size.width / 2,
-                        y: circleTopOffsetPt + small / 2
-                    )
-                // ← 新增：闪绿环 overlay
-
-                // 顶部提示（不用 clamped，避免访问级别冲突）
-                let yTop = max(24, min(circleTopOffsetPt - 28, geo.size.height - 24))
-                Text("若未能正视屏幕或光线不够明亮")
-                    .foregroundColor(.white.opacity(0.85))
-                    .position(x: geo.size.width / 2, y: yTop - 80)
-                Text("将导致误差扩大到毫米级")
-                    .foregroundColor(.white.opacity(0.85))
-                    .position(x: geo.size.width / 2, y: yTop - 50)
-                
-                // 底部：调试信息 + 语音条
-                VStack(spacing: 8) {
-                    Spacer()
-
-                    // —— 临时调试显示 ——
-                    VStack(spacing: 4) {
-                        HStack {
-                            Text("实时D \(fmtCM(pdSvc.distance_m))")
-                            Text("实时IPD \(fmtIPD(pdSvc.ipd_mm))")
-                        }
-                        .font(.footnote).foregroundColor(.white.opacity(0.9))
-
-                        HStack {
-                            Text("记录：")
-                            Text("① \(fmtIPD(state.pd1_mm))")
-                            Text("② \(fmtIPD(state.pd2_mm))")
-                            Text("③ \(fmtIPD(state.pd3_mm))")
-                        }
-                        .font(.footnote).foregroundColor(.white.opacity(0.7))
-                    }
-                    .padding(.bottom, 2)
-                    // —— 结束临时调试显示 ——
-
-                    VoiceBar().padding(.bottom, 12)
-                        .scaleEffect(0.5)   // 缩小 50%
-                }
-            }
-        }
-        .navigationBarBackButtonHidden()
-        .onAppear {
-            // 仅第一次进入时播报
-            if index == 1, !hasSpokenIntro {
-                services.speech.restartSpeak("开始第一次瞳距测量。请取下眼镜，正脸面向手机，保持在三十五厘米距离。", delay: 0.25)
-                hasSpokenIntro = true
-            }
-            pdSvc.start()
-            // 给播报留时间
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                startCaptureLoop()
-            }
-        }
-
-    }
-
-    // 仅在本视图内使用的格式化工具
-    private func fmtCM(_ v: Double?) -> String {
-        guard let v = v else { return "-- cm" }
-        return String(format: "%.0f cm", v * 100)
-    }
-    private func fmtIPD(_ v: Double?) -> String {
-        guard let v = v else { return "--.- mm" }
-        return String(format: "%.1f mm", v)
-    }
-
-    // MARK: - 流程
-    private func startCaptureLoop() {
-        guard !isCapturing else { return }
-        isCapturing = true
-        pdSvc.captureOnce { ipd in
-            DispatchQueue.main.async {
-                isCapturing = false
-                if let ipd = ipd {
-                    flashHighlight()
-                    store(ipd: ipd)
-                    proceed()
-                } else {
-                    retryCount += 1
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                        startCaptureLoop()
-                    }
-                }
-            }
-        }
-    }
-    // 两轮闪烁
-    private func flashHighlight() {
-        didHighlight = true
-        // 两轮出现–消失：0.125s/0.25s/0.375s 切换
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.125) { didHighlight = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25)  { didHighlight = true  }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.375) { didHighlight = false }
-    }
-    
-    private func store(ipd: Double) {
-        switch index {
-        case 1: state.pd1_mm = ipd
-        case 2: state.pd2_mm = ipd
-        default: state.pd3_mm = ipd
-        }
-    }
-
-    private func proceed() {
-        switch index {
-        case 1:
-            // 直接进入第二次（不播报）
-            DispatchQueue.main.async { state.path.append(.pd2) }
-
-        case 2:
-            let d1 = state.pd1_mm ?? .nan
-            let d2 = state.pd2_mm ?? .nan
-            guard !d1.isNaN, !d2.isNaN else {
-                DispatchQueue.main.async { state.path.append(.pd1) }
-                return
-            }
-            if abs(d1 - d2) > 0.8 {
-                services.speech.speak("两次差异较大，请再测一次。")
-                DispatchQueue.main.async { state.path.append(.pd3) }
-            } else {
-                // 直接进入第三次（不播报）
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    state.path.append(.pd3)
-                }
-            }
-
-        default:
-            // 第三次：取三次平均
-            let d1 = state.pd1_mm ?? .nan
-            let d2 = state.pd2_mm ?? .nan
-            let d3 = state.pd3_mm ?? .nan
-            let vals = [d1, d2, d3]
-            // 有缺失则重测
-            guard vals.allSatisfy({ !$0.isNaN }) else {
-                DispatchQueue.main.async { state.path.append(.pd1) }
-                return
-            }
-            let avg = (d1 + d2 + d3) / 3.0
-            // 写回全局状态（可视化调试也好）
-            state.pd1_mm = avg
-            state.pd2_mm = avg
-            state.pd3_mm = avg
-
-            // 播报平均值
-            services.speech.speak("测量完成，平均瞳距 \(fmtIPD(avg))")
-
-            // 进入下一步：散光测量开始
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                state.path.append(.cylR_A)
-            }
-        }
-    }
-
-
-    private func bestPairAverage(_ xs: [Double]) -> Double {
-        var best = (diff: Double.greatestFiniteMagnitude, mean: 0.0)
-        for i in 0..<xs.count {
-            for j in i+1..<xs.count {
-                let d = abs(xs[i] - xs[j])
-                if d < best.diff { best = (d, (xs[i] + xs[j]) / 2.0) }
-            }
-        }
-        return best.mean
-    }
-}
-
-
 
 // MARK: - CYL 统一入口（AppRouter 写法保持不变）
 struct CYLAxialView: View {
     let eye: Eye
     let step: CylStep
     var body: some View {
-        Group {
-            if step == .A { CYLAxialAView(eye: eye) }
-            else          { CYLAxialMoreView(eye: eye) }
-        }
+        Group { if step == .A { CYLAxialAView(eye: eye) } else { CYLAxialMoreView(eye: eye) } }
     }
 }
 
-
-
-
-
-/// MARK: - 5A：散光盘指引（阶段1）→ 判断（阶段2，先1键后3键）
+/// 5A：散光盘指引 + 判定
 struct CYLAxialAView: View {
     enum Phase { case guide, decide }
-
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
     @State private var phase: Phase = .guide
     @State private var didSpeak = false
-    @State private var canContinue = false        // 阶段1：TTS 未完禁用
-    @State private var showChoices = false        // 阶段2：是否展开三按钮
+    @State private var canContinue = false
+    @State private var showChoices = false
 
     private var guideButtonTitle: String {
         eye == .right ? "明白了。开始闭左眼测右眼" : "开始闭右眼测左眼"
     }
-    var body: some View {
 
+    var body: some View {
         GeometryReader { g in
             ZStack {
-                // —— 居中主图：不随底部按钮区域改变 —— //
                 Group {
                     if phase == .guide {
                         Image("cylguide")
@@ -814,37 +160,26 @@ struct CYLAxialAView: View {
                             .frame(width: min(g.size.width * 0.80, 360))
                             .offset(y: -60)
                     } else {
-                        CylStarVector(         // 矢量散光盘
-                            spokes: 24,
-                            innerRadiusRatio: 0.23,
-                            dashLength: 10,
-                            gapLength: 7,
-                            lineWidth: 3,
-                            color: .black,
-                            holeFill: .white
-                        )
-                        .offset(y: -60)
+                        CylStarVector(spokes: 24, innerRadiusRatio: 0.23,
+                                      dashLength: 10, gapLength: 7, lineWidth: 3,
+                                      color: .black, holeFill: .white)
+                            .offset(y: -60)
                         CylStarVector(color: .black, lineCap: .butt)
                             .frame(width: 320, height: 320)
                             .offset(y: -40)
-                            
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .offset(y: (phase == .decide && showChoices) ? -140 : 0)      // ← 展开三按钮时上移 140px
-                .animation(.easeInOut(duration: 0.25), value: showChoices)     // ← 平滑过渡
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .offset(y: (phase == .decide && showChoices) ? -140 : 0)
+                .animation(.easeInOut(duration: 0.25), value: showChoices)
                 .background(Color.white.ignoresSafeArea())
 
-                // —— 底部操作区：永远贴着底边 —— //
                 VStack(spacing: 16) {
                     if phase == .guide {
                         PrimaryButton(title: guideButtonTitle) {
-                            phase = .decide
-                            showChoices = false
-                            speakEyePrompt()        // ✅ 左右眼都播对应提示
+                            phase = .decide; showChoices = false; speakEyePrompt()
                         }
-                        .disabled(!canContinue)      // 右眼：需等待；左眼：runGuideSpeechAndGate() 会直接放开
-                        .opacity(canContinue ? 1.0 : 0.4)
+                        .disabled(!canContinue).opacity(canContinue ? 1 : 0.4)
                     } else {
                         if !showChoices {
                             PrimaryButton(title: "报告观察结果") {
@@ -860,143 +195,106 @@ struct CYLAxialAView: View {
                     VoiceBar().scaleEffect(0.5)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 2) // 需要更贴底就调小/更抬高就调大
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom) // ✅ 关键：对齐到底部
+                .padding(.bottom, 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(width: g.size.width, height: g.size.height)
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { guard !didSpeak else { return }; didSpeak = true; runGuideSpeechAndGate() }
+        .onChangeCompat(phase) { _, newPhase in if newPhase == .guide { runGuideSpeechAndGate() } }
+    }
 
-                        }
-                        .frame(width: g.size.width, height: g.size.height)
-                        .ignoresSafeArea(edges: .bottom)
-                    }
-                    .navigationBarTitleDisplayMode(.inline)
-                    .onAppear {
-                        guard !didSpeak else { return }
-                        didSpeak = true
-                        runGuideSpeechAndGate()
-                    }
-                    .onChangeCompat(phase) { _, newPhase in
-                        if newPhase == .guide { runGuideSpeechAndGate() }
-                    }
-                }
-
-    // 阶段1：只播“由近推远…”并设置最小时限
     private func runGuideSpeechAndGate() {
         services.speech.stop()
         if eye == .right {
-            // 右眼：播引导 + 最小时限
-            let instruction = "本环节测散光。屏幕中间会有一个放射状散光盘。需要你在手持距离内，慢慢的、反复的，将手机由近推远，由远拉近，观察散光盘的虚线是否会连成一条黑色的实线。最后报告观察结果。"
+            let instruction = "本环节测散光……最后报告观察结果。"
             services.speech.restartSpeak(instruction, delay: 0.35)
-
             canContinue = false
-            let estimated: TimeInterval = 20   // 你的实测时长，可继续微调
-            DispatchQueue.main.asyncAfter(deadline: .now() + estimated) {
-                canContinue = true
-            }
-        } else {
-            // 左眼：不播语音、不限时，按钮直接可点
-            canContinue = true
-        }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) { canContinue = true }
+        } else { canContinue = true }
     }
-
-    // 阶段2进入：播“闭眼提示”
     private func speakEyePrompt() {
         services.speech.stop()
-        let prompt = (eye == .right)
+        let prompt = eye == .right
             ? "请闭上左眼，右眼看散光盘。慢慢移动手机、慢慢观察"
             : "请闭上右眼，左眼看散光盘。慢慢移动手机、慢慢观察"
         services.speech.restartSpeak(prompt, delay: 0.15)
     }
-
-    // MARK: - 判定逻辑
     private func answer(_ has: Bool) {
         if eye == .right { state.cylR_has = has } else { state.cylL_has = has }
-        if has {
-            state.path.append(eye == .right ? .cylR_B : .cylL_B) // 去 5B（轴向）→ 6（焦距）
-        } else {
-            if eye == .right { state.path.append(.cylL_A) }
-            else             { state.path.append(.vaLearn) }
-        }
+        if has { state.path.append(eye == .right ? .cylR_B : .cylL_B) }
+        else   { state.path.append(eye == .right ? .cylL_A : .vaLearn) }
     }
-
-    // “疑似”也按“有清晰”走，且记录疑似标记
     private func answerMaybe() {
         if eye == .right { state.cylR_suspect = true } else { state.cylL_suspect = true }
         answer(true)
     }
 }
 
-
-// MARK: - 5B：点击外圈数字得轴向
-
+/// 5B：点外圈数字得轴向
 struct CYLAxialMoreView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
     @State private var didSpeak = false
-    @State private var selectedMark: Double? = nil   // 1…12 或 0.5、1.5、…、11.5
+    @State private var selectedMark: Double? = nil
 
     var body: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 138)
-
             ZStack {
-                CylStarVector()
-                    .frame(height: 280)
-
+                CylStarVector().frame(height: 280)
                 GeometryReader { geo in
-                    let size      = geo.size
-                    let r         = min(size.width, size.height) * 0.44
-                    let cx        = size.width * 0.5
-                    let cy        = size.height * 0.5
-                    let bigFont   = size.width * 0.085
+                    let size = geo.size
+                    let r = min(size.width, size.height) * 0.44
+                    let cx = size.width * 0.5
+                    let cy = size.height * 0.5
+                    let bigFont = size.width * 0.085
                     let smallFont = bigFont * 0.5
-                    let hitBig:  CGFloat = 44
+                    let hitBig: CGFloat = 44
                     let hitHalf: CGFloat = 34
 
-                    // —— 半刻度（0.5、1.5、…、11.5） —— //
                     ForEach(Array(stride(from: 0.5, through: 11.5, by: 1.0)), id: \.self) { v in
-                        let angle = (3.0 - v) * .pi / 6.0
-                        let x = cx + CGFloat(cos(angle)) * r
-                        let y = cy - CGFloat(sin(angle)) * r
-
+                        let a = (3.0 - v) * .pi / 6.0
+                        let x = cx + CGFloat(cos(a)) * r
+                        let y = cy - CGFloat(sin(a)) * r
                         Text(String(format: "%.1f", v))
                             .font(.system(size: smallFont, weight: .semibold))
-                            .foregroundColor(isHighlighted(v) ? .green : .primary) // ✅ 对向同步高亮
-                            .frame(width: hitHalf, height: hitHalf, alignment: .center)
+                            .foregroundColor(isHL(v) ? .green : .primary)
+                            .frame(width: hitHalf, height: hitHalf)
                             .contentShape(Circle())
                             .position(x: x, y: y)
-                            .onTapGesture { selectMark(v) }
+                            .onTapGesture { pick(v) }
                     }
-
-                    // —— 整点（1…12） —— //
                     ForEach(1...12, id: \.self) { clock in
                         let v = Double(clock)
-                        let angle = (3.0 - v) * .pi / 6.0
-                        let x = cx + CGFloat(cos(angle)) * r
-                        let y = cy - CGFloat(sin(angle)) * r
-
+                        let a = (3.0 - v) * .pi / 6.0
+                        let x = cx + CGFloat(cos(a)) * r
+                        let y = cy - CGFloat(sin(a)) * r
                         Text("\(clock)")
                             .font(.system(size: bigFont, weight: .semibold))
-                            .foregroundColor(isHighlighted(v) ? .green : .primary) // ✅ 对向同步高亮
-                            .frame(width: hitBig, height: hitBig, alignment: .center)
+                            .foregroundColor(isHL(v) ? .green : .primary)
+                            .frame(width: hitBig, height: hitBig)
                             .contentShape(Circle())
                             .position(x: x, y: y)
-                            .onTapGesture { selectMark(v) }
+                            .onTapGesture { pick(v) }
                     }
                 }
             }
             .frame(height: 360)
 
-            // —— 底部大号回显：显示 a—b —— //
             ZStack {
                 if let v = selectedMark {
                     GeometryReader { gg in
                         let bigSize = min(gg.size.width, 360) * 0.16
-                        let pair = "\(displayString(v))—\(displayString(opposite(of: v)))"
+                        let pair = "\(disp(v))—\(disp(opp(v)))"
                         Text(pair)
                             .font(.system(size: bigSize, weight: .heavy))
                             .foregroundColor(.green)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .transition(.opacity.combined(with: .scale))
                     }
                 }
@@ -1005,8 +303,7 @@ struct CYLAxialMoreView: View {
             .animation(.easeInOut(duration: 0.18), value: selectedMark)
 
             Text(selectedMark == nil ? "请点击与清晰黑色实线方向最靠近的数字" : "已记录")
-                .foregroundColor(selectedMark == nil ? .gray : .gray)
-                .animation(.easeInOut(duration: 0.15), value: selectedMark)
+                .foregroundColor(.gray)
 
             Spacer(minLength: 120)
             VoiceBar().scaleEffect(0.5)
@@ -1024,87 +321,50 @@ struct CYLAxialMoreView: View {
         }
     }
 
-    // MARK: - 交互与显示
-    private func selectMark(_ v: Double) {
+    private func pick(_ v: Double) {
         selectedMark = v
-        withAnimation(.easeOut(duration: 0.18)) {}
-
-        // 业务逻辑保持：四舍五入到最近整点进行轴向计算
         let rounded = (v == 12.0) ? 12 : Int(round(v))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            onPick(rounded)
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onPick(rounded) }
     }
-
-    /// 当前是否需要高亮（本值 + 对向值）
-    private func isHighlighted(_ value: Double) -> Bool {
+    private func isHL(_ v: Double) -> Bool {
         guard let s = selectedMark else { return false }
-        let o = opposite(of: s)
-        return abs(value - s) < 0.0001 || abs(value - o) < 0.0001
+        let o = opp(s)
+        return abs(v - s) < 0.0001 || abs(v - o) < 0.0001
     }
+    private func opp(_ v: Double) -> Double { let o = v + 6.0; return o > 12.0 ? (o - 12.0) : o }
+    private func disp(_ v: Double) -> String { v.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(v)) : String(format: "%.1f", v) }
 
-    /// 计算对向值：+6 超过 12 则 -12
-    private func opposite(of v: Double) -> Double {
-        let o = v + 6.0
-        return o > 12.0 ? (o - 12.0) : o
-    }
-
-    private func displayString(_ v: Double) -> String {
-        v.truncatingRemainder(dividingBy: 1) == 0
-        ? String(Int(v))
-        : String(format: "%.1f", v)
-    }
-
-    // MARK: - 原有逻辑：记录轴向并跳转
     private func onPick(_ clock: Int) {
         let axis = (clock == 12 ? 180 : clock * 15)
-
-        if eye == .right {
-            state.cylR_axisDeg = axis
-            state.cylR_clarityDist_mm = nil
-        } else {
-            state.cylL_axisDeg = axis
-            state.cylL_clarityDist_mm = nil
-        }
-
-        services.speech.stop()
-        services.speech.speak("已记录。")
+        if eye == .right { state.cylR_axisDeg = axis; state.cylR_clarityDist_mm = nil }
+        else             { state.cylL_axisDeg = axis; state.cylL_clarityDist_mm = nil }
+        services.speech.stop(); services.speech.speak("已记录。")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             state.path.append(eye == .right ? .cylR_D : .cylL_D)
         }
     }
 }
 
-
-
-
 // MARK: - 6：锁定“最清晰距离”
-
 struct CYLDistanceView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     let eye: Eye
-
     @StateObject private var svc = FacePDService()
     @State private var didSpeak = false
 
     var body: some View {
         VStack(spacing: 20) {
             Spacer(minLength: 120)
-            CylStarVector(color: .black, lineCap: .butt)
-                .frame(width: 320, height: 320)
+            CylStarVector(color: .black, lineCap: .butt).frame(width: 320, height: 320)
             Spacer(minLength: 80)
-            Text("实时距离  \(fmtMM(svc.distance_m))")
-                .foregroundColor(.secondary)
-
+            Text("实时距离  \(fmtMM(svc.distance_m))").foregroundColor(.secondary)
             PrimaryButton(title: "这个距离实线最清晰") { lockAndNext() }
             Spacer(minLength: 20)
-            VoiceBar()
-                .scaleEffect(0.5)   // 缩小 50%
+            VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 8)
         }
         .pagePadding()
- //     .navigationTitle(eye == .right ? "右眼" : "左眼")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             svc.start()
@@ -1112,86 +372,67 @@ struct CYLDistanceView: View {
             didSpeak = true
             services.speech.stop()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                services.speech.speak("本步骤是要记录当您这只眼看到黑色实线相对最清晰时，眼睛和屏幕的距离。前后微调屏幕距离，当实线最清晰时，手机和头部都保持不动，点击屏幕上的按钮。")
+                services.speech.speak("本步骤是要记录当您这只眼看到黑色实线相对最清晰时的距离……")
             }
         }
-
     }
 
     private func lockAndNext() {
         let mm = (svc.distance_m ?? 0) * 1000.0
-        services.speech.stop()
-        services.speech.speak("已记录。")
+        services.speech.stop(); services.speech.speak("已记录。")
         if eye == .right {
             state.cylR_clarityDist_mm = mm
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                state.path.append(.cylL_A)      // 右眼完成 → 换左眼
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { state.path.append(.cylL_A) }
         } else {
             state.cylL_clarityDist_mm = mm
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                state.path.append(.vaLearn)     // 左眼完成 → 进入 VA 学习
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { state.path.append(.vaLearn) }
         }
     }
-
-    // 本地格式化，避免依赖全局 formatMM
-    private func fmtMM(_ m: Double?) -> String {
-        guard let m = m else { return "--.- mm" }
-        return String(format: "%.1f mm", m * 1000.0)
-    }
+    private func fmtMM(_ m: Double?) -> String { guard let m = m else { return "--.- mm" }; return String(format: "%.1f mm", m * 1000.0) }
 }
-
 
 // =================================================
 // 7–11. VA 模块入口（统一由 VAFlowView 承担所有界面与逻辑）
-// 路由仍然从 .vaLearn 进入，这里直接托管给 VAFlowView。
-
-import SwiftUI
-
-// 7. 入口：练习/测距/蓝白两轮/结束，全部在 VAFlowView 内部完成
 struct VALearnView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
-
     var body: some View {
         VAFlowView { outcome in
-            // TODO: 如需把结果落到 AppState，请在此按你的字段命名保存：
-            // state.vaRightBlue  = outcome.rightBlue
-            // state.vaRightWhite = outcome.rightWhite
-            // state.vaLeftBlue   = outcome.leftBlue
-            // state.vaLeftWhite  = outcome.leftWhite
+            state.lastOutcome = outcome
             state.path.append(.result)
         }
-        // VAFlowView 内部已用到 AppServices 的语音/AR，会从环境继承
     }
 }
-
-// —— 兼容旧路由 ——
-// 如果路由表仍含有 .vaDistance / .vaR_blue / .vaR_white / .vaL_blue / .vaL_white / .vaEnd
-// 则这些页面一律作为“转发壳”，进入统一的 VAFlowView。
-
-struct VADistanceLockView: View {
-    var body: some View { VALearnView() }
-}
-
+struct VADistanceLockView: View { var body: some View { VALearnView() } }
 struct VAView: View {
-    // 旧接口保留参数签名避免路由编译错误，但不再使用
-    let eye: Eye
-    let bg: VABackground
+    let eye: Eye; let bg: VABackground
     var body: some View { VALearnView() }
 }
+struct VAEndView: View { var body: some View { VALearnView() } }
 
-struct VAEndView: View {
-    var body: some View { VALearnView() }
+// 12 · Result（验光单页 + 保存到相册 · UI2按钮，竖排）
+private struct ResultKVRow: View {
+    let title: String; let value: String
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).foregroundColor(.secondary)
+            Spacer(minLength: 12)
+            Text(value).bold().monospacedDigit()
+        }.font(.body)
+    }
 }
-
-
-// 12 · Result（验光单页 + 保存到相册 · UI2按钮）
-import SwiftUI
-import Photos
-
-// 仅负责绘制白色“验光单”卡片，用于屏幕展示 & 渲染成图片
+private struct ResultEyeBlock: View {
+    let title: String
+    let rows: [(String, String)]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
+                ResultKVRow(title: item.0, value: item.1)
+            }
+        }
+    }
+}
 private struct ResultCard: View {
     let pdText: String?
     let rightAxisDeg: Int?
@@ -1202,50 +443,22 @@ private struct ResultCard: View {
     let rightWhite: Double?
     let leftBlue: Double?
     let leftWhite: Double?
+    let rCF: String
+    let lCF: String
 
     private func f(_ v: Double?) -> String { v.map{ String(format: "%.1f", $0) } ?? "—" }
     private func axis(_ a: Int?) -> String { a.map{ "\($0)°"} ?? "—" }
     private func focus(_ v: Double?) -> String { v.map{ String(format: "%.0f mm", $0) } ?? "—" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("验光单").font(.system(size: 28, weight: .semibold))
-
-            HStack {
-                Text("瞳距").font(.headline)
-                Spacer()
-                Text(pdText ?? "—")
-            }
-
-            Grid(alignment: .leadingFirstTextBaseline,
-                 horizontalSpacing: 16, verticalSpacing: 12) {
-                GridRow {
-                    Text("眼别").font(.headline)
-                    Text("蓝屏").font(.headline)
-                    Text("白屏").font(.headline)
-                    Text("轴向").font(.headline)
-                    Text("焦线位置").font(.headline)
-                }
-                Divider()
-                GridRow {
-                    Text("右眼")
-                    Text(f(rightBlue))
-                    Text(f(rightWhite))
-                    Text(axis(rightAxisDeg))
-                    Text(focus(rightFocusMM))
-                }
-                GridRow {
-                    Text("左眼")
-                    Text(f(leftBlue))
-                    Text(f(leftWhite))
-                    Text(axis(leftAxisDeg))
-                    Text(focus(leftFocusMM))
-                }
-            }
-
-            Text("（单位：logMAR／mm 或项目内实际单位）")
-                .font(.footnote)
-                .foregroundColor(.secondary)
+            HStack { Text("瞳距").font(.headline); Spacer(); Text(pdText ?? "—").monospacedDigit() }
+            Divider().padding(.vertical, 1)
+            ResultEyeBlock(title: "右眼", rows: [("蓝屏", f(rightBlue)), ("白屏", f(rightWhite)), ("轴向", axis(rightAxisDeg)), ("焦线位置", focus(rightFocusMM)), ("CF", rCF)])
+            Divider().padding(.vertical, 1)
+            ResultEyeBlock(title: "左眼", rows: [("蓝屏", f(leftBlue)), ("白屏", f(leftWhite)), ("轴向", axis(leftAxisDeg)), ("焦线位置", focus(leftFocusMM)), ("CF", lCF)])
+            Text("（单位：logMAR／mm 或项目内实际单位）").font(.footnote).foregroundColor(.secondary)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1256,7 +469,6 @@ private struct ResultCard: View {
 }
 
 struct ResultV2View: View {
-    // 这些值从你的状态/AppState传入；这里用可选便于对接
     let pdText: String?
     let rightAxisDeg: Int?
     let leftAxisDeg: Int?
@@ -1267,95 +479,63 @@ struct ResultV2View: View {
     let leftBlue: Double?
     let leftWhite: Double?
 
+    @EnvironmentObject var state: AppState
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
-
     private let headerH: CGFloat = 260
+
+    private var cardView: some View {
+        ResultCard(
+            pdText: pdText,
+            rightAxisDeg: rightAxisDeg, leftAxisDeg: leftAxisDeg,
+            rightFocusMM: rightFocusMM, leftFocusMM: leftFocusMM,
+            rightBlue: rightBlue, rightWhite: rightWhite,
+            leftBlue: leftBlue, leftWhite: leftWhite,
+            rCF: state.cfRightText, lCF: state.cfLeftText
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
-            // 顶部蓝色头图（和其它 v2 页面一致）
-            V2BlueHeader(
-                title: "验光完成",
-                subtitle: "系统已将配镜度数发给您的配镜服务商",
-                progress: nil,
-                height: headerH
-            )
-            .ignoresSafeArea(edges: .top)
+            V2BlueHeader(title: "验光完成",
+                         subtitle: "系统已将配镜度数发给您的配镜服务商",
+                         progress: nil, height: headerH)
+                .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 16) {
                 ScrollView(showsIndicators: false) {
-                    ResultCard(
-                        pdText: pdText,
-                        rightAxisDeg: rightAxisDeg, leftAxisDeg: leftAxisDeg,
-                        rightFocusMM: rightFocusMM, leftFocusMM: leftFocusMM,
-                        rightBlue: rightBlue, rightWhite: rightWhite,
-                        leftBlue: leftBlue, leftWhite: leftWhite
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
+                    cardView
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
                 }
-
-                // UI2 主按钮：GlowButton（渐变胶囊、阴影已内置）
                 GlowButton(title: isSaving ? "正在保存…" : "保存到相册", disabled: isSaving) {
                     Task { await saveToAlbum() }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
             }
-            .padding(.top, headerH * 0.60)
+            .padding(.top, headerH * 0.40)
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
-        .alert("提示", isPresented: $showAlert) {
-            Button("好", role: .cancel) {}
-        } message: {
-            Text(alertMsg)
-        }
+        .alert("提示", isPresented: $showAlert) { Button("好", role: .cancel) {} } message: { Text(alertMsg) }
     }
 
-    // MARK: - 保存到相册
     private func saveToAlbum() async {
-        isSaving = true
-        defer { isSaving = false }
-
-        let content = ResultCard(
-            pdText: pdText,
-            rightAxisDeg: rightAxisDeg, leftAxisDeg: leftAxisDeg,
-            rightFocusMM: rightFocusMM, leftFocusMM: leftFocusMM,
-            rightBlue: rightBlue, rightWhite: rightWhite,
-            leftBlue: leftBlue, leftWhite: leftWhite
-        )
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .background(Color.white)          // 渲染成图片必须白底
-
-        let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
-
+        isSaving = true; defer { isSaving = false }
+        let content = cardView.padding(.horizontal, 16).padding(.vertical, 16).background(Color.white)
+        let renderer = ImageRenderer(content: content); renderer.scale = UIScreen.main.scale
         #if canImport(UIKit)
-        guard let uiImage = renderer.uiImage else {
-            alertMsg = "生成图片失败。"
-            showAlert = true
-            return
-        }
-
+        guard let uiImage = renderer.uiImage else { alertMsg = "生成图片失败。"; showAlert = true; return }
         let status = PHPhotoLibrary.authorizationStatus()
         if status == .notDetermined {
-            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            if !(newStatus == .authorized || newStatus == .limited) {
-                alertMsg = "未获得相册写入权限。"
-                showAlert = true
-                return
-            }
+            let s = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard s == .authorized || s == .limited else { alertMsg = "未获得相册写入权限。"; showAlert = true; return }
         } else if !(status == .authorized || status == .limited) {
-            alertMsg = "未获得相册写入权限。"
-            showAlert = true
-            return
+            alertMsg = "未获得相册写入权限。"; showAlert = true; return
         }
-
         PHPhotoLibrary.shared().performChanges {
             PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
         } completionHandler: { success, error in
@@ -1365,33 +545,7 @@ struct ResultV2View: View {
             }
         }
         #else
-        alertMsg = "当前平台不支持相册保存。"
-        showAlert = true
+        alertMsg = "当前平台不支持相册保存。"; showAlert = true
         #endif
     }
 }
-
-//========================================
-#if DEBUG
-import SwiftUI
-
-struct ResultV2View_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            ResultV2View(
-                pdText:       "62.0 mm",
-                rightAxisDeg: 90,
-                leftAxisDeg:  85,
-                rightFocusMM: 12,
-                leftFocusMM:  10,
-                rightBlue:    0.1,
-                rightWhite:   0.0,
-                leftBlue:     0.2,
-                leftWhite:   -0.1
-            )
-        }
-        .previewDisplayName("结果页预览")
-        .previewDevice("iPhone 15 Pro")
-    }
-}
-#endif

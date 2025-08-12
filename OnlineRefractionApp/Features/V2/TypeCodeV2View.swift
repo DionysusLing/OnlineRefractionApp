@@ -65,13 +65,13 @@ struct TypeCodeV2View: View {
                         Image("mainpic")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 240, height: 240)
+                            .frame(width: 220, height: 220)
                         Spacer()
                     }
                     Color.clear.frame(height: 30)
 
                     // 条件开关
-                    ChipToggle(label: "我的年龄在 16–50 岁间", isOn: $ageOK)
+                    ChipToggle(label: "我的年龄在 16–60 岁间", isOn: $ageOK)
                     ChipToggle(label: "我是近视，不是远视", isOn: $myopiaOnly)
 
                     // 邀请码输入
@@ -108,10 +108,7 @@ struct TypeCodeV2View: View {
                     GlowButton(title: primaryTitle) {
                         proceed()   // 分流逻辑：空→快速模式；非空→医师模式
                     }
-                    .padding(.horizontal, 24)
                     .padding(.top, 6)
-
-                    Color.clear.frame(height: 2)
 
                     // 语音按钮（保留你原有）
                     HStack { Spacer(); SpeakerView(); Spacer() }

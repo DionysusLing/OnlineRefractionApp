@@ -2,7 +2,7 @@
 import SwiftUI
 import Photos
 
-// MARK: - 仅负责绘制“快速模式”的白色卡片
+// MARK: - 仅负责绘制“快速模式”的白色卡片（竖排版）
 private struct FastResultCard: View {
     let pdText: String
     let rSphere: String
@@ -13,38 +13,35 @@ private struct FastResultCard: View {
     let lAxis: String
     let rFocal: String
     let lFocal: String
+    let rCF: String
+    let lCF: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("验光单").font(.system(size: 28, weight: .semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            Text("验光单")
+                .font(.system(size: 28, weight: .semibold))
 
+            // 瞳距
             HStack {
                 Text("瞳距").font(.headline)
                 Spacer()
                 Text(pdText.isEmpty ? "—" : pdText)
+                    .monospacedDigit()
             }
 
-            Grid(alignment: .leadingFirstTextBaseline,
-                 horizontalSpacing: 16, verticalSpacing: 12) {
-                GridRow {
-                    Text("眼别").font(.headline)
-                    Text("近视(≈1/d)").font(.headline)
-                    Text("散光").font(.headline)
-                    Text("轴向").font(.headline)
-                    Text("焦线").font(.headline)
-                }
-                Divider()
-                GridRow {
-                    Text("右眼")
-                    Text(rSphere); Text(rCyl); Text(rAxis); Text(rFocal)
-                }
-                GridRow {
-                    Text("左眼")
-                    Text(lSphere); Text(lCyl); Text(lAxis); Text(lFocal)
-                }
-            }
+            Divider().padding(.vertical, 1)
 
-            Text("说明：近视度数为 1/d 的估算值（四分之一步长取整）；轴向/焦线来自“快速散光”。")
+            // 右眼（竖排）
+            EyeBlock(title: "右眼",
+                     sphere: rSphere, cyl: rCyl, axis: rAxis, focal: rFocal, cf: rCF)
+
+            Divider().padding(.vertical, 1)
+
+            // 左眼（竖排）
+            EyeBlock(title: "左眼",
+                     sphere: lSphere, cyl: lCyl, axis: lAxis, focal: lFocal, cf: lCF)
+
+            Text("说明：近视度数为0.25D步长取整。")
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
@@ -55,6 +52,42 @@ private struct FastResultCard: View {
         .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
     }
 }
+
+// 小组件：键值行
+private struct KVRow: View {
+    let title: String
+    let value: String
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).foregroundColor(.secondary)
+            Spacer(minLength: 12)
+            Text(value).bold().monospacedDigit()
+        }
+        .font(.body)
+    }
+}
+
+// 小组件：单眼信息块（竖排）
+private struct EyeBlock: View {
+    let title: String
+    let sphere: String
+    let cyl: String
+    let axis: String
+    let focal: String
+    let cf: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline)
+            KVRow(title: "近视", value: sphere)
+            KVRow(title: "散光", value: cyl)
+            KVRow(title: "轴向", value: axis)
+            KVRow(title: "焦线", value: focal)
+            KVRow(title: "CF",  value: cf)
+        }
+    }
+}
+
 
 struct FastResultView: View {
     @EnvironmentObject var state: AppState
@@ -71,7 +104,7 @@ struct FastResultView: View {
         guard let d = dM, d > 0 else { return "—" }
         let diopter = 1.0 / d
         let rounded = (diopter * 4.0).rounded() / 4.0
-        return String(format: "≈ -%.2f D", rounded)
+        return String(format: " -%.2f D", rounded)
     }
     private func axisText(_ a: Int?) -> String { a.map { "\($0)°" } ?? "—" }
     private func focalTextM(_ m: Double?) -> String { m.map { String(format: "%.2f m", $0) } ?? "—" }
@@ -80,7 +113,7 @@ struct FastResultView: View {
     /// 散光：axis == nil → “0.00 D”（FastCYL 点了“无清晰黑色实线”）；axis != nil → “—”
     private func cylPowerText(for axis: Int?) -> String { axis == nil ? "0.00 D" : "—" }
 
-    // ✅ 焦线显示规则（按眼）：
+    // 焦线显示规则（按眼）：
     // 若该眼散光为“无”(0.00 D) → 焦线显示 “—”；否则按记录的 focalLineDistM 显示。
     private func focalTextForEye(axis: Int?, focalM: Double?) -> String {
         if axis == nil { return "—" }                // 无散光，不显示焦线
@@ -100,7 +133,9 @@ struct FastResultView: View {
             rAxis: axisText(rAxisDeg),
             lAxis: axisText(lAxisDeg),
             rFocal: focalTextForEye(axis: rAxisDeg, focalM: state.fast.focalLineDistM),
-            lFocal: focalTextForEye(axis: lAxisDeg, focalM: state.fast.focalLineDistM)
+            lFocal: focalTextForEye(axis: lAxisDeg, focalM: state.fast.focalLineDistM),
+            rCF: state.cfRightText,
+            lCF: state.cfLeftText
         )
     }
 
@@ -127,7 +162,7 @@ struct FastResultView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
             }
-            .padding(.top, headerH * 0.60)
+            .padding(.top, headerH * 0.40)
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)

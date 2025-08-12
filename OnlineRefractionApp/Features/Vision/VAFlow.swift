@@ -826,7 +826,7 @@ private struct VAEndPage: View {
                     GhostPrimaryButton(title: "再测一次") { onAgain() }
                     GlowButton(title: "提交结果", disabled: !canSubmit) { onSubmitTap() }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 16)
                 .padding(.top, 8)
 
                 Text("系统是如何通过视力VA计算屈光不正度数？")

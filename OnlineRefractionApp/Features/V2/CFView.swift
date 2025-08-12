@@ -1,0 +1,161 @@
+// Features/V2/CFView.swift
+import SwiftUI
+
+/// 对比敏感度（CF）筛查：三等分灰阶 + 1/2/3 选择；先右眼后左眼
+/// 映射：1 → +0.90 D；2 → +0.55 D；3 → 0.00 D
+struct CFView: View {
+    enum EyePhase { case right, left, done }
+
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var services: AppServices
+
+    @State private var phase: EyePhase = .right
+    @State private var selR: Int? = nil
+    @State private var selL: Int? = nil
+
+    private let cfMap: [Int: Double] = [1: 0.90, 2: 0.55, 3: 0.00]
+
+    var body: some View {
+        ZStack {
+            // 背景：三等分灰阶 —— 铺满全屏（含安全区）
+            HStack(spacing: 0) {
+                Color(hex: "#FFFFFF")
+                Color(hex: "#FAFAFA")
+                Color(hex: "#E6E6E6")
+            }
+            .ignoresSafeArea()
+            .overlay(
+                HStack {                      // 细分隔线
+                    Spacer()
+                    Rectangle().fill(Color.black.opacity(0.06)).frame(width: 1)
+                    Spacer()
+                    Rectangle().fill(Color.black.opacity(0.06)).frame(width: 1)
+                    Spacer()
+                }
+            )
+
+            // 底部按钮浮层（不占用布局高度，因此不压缩上面的灰阶）
+            VStack {
+                Spacer()
+                HStack(spacing: 56) {
+                    cfButton(1)
+                    cfButton(2)
+                    cfButton(3)
+                }
+                .padding(.vertical, 12)
+                .padding(.bottom, 10) // 避开 Home 指示条
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .onAppear {
+            // 右眼开场提示
+            services.speech.restartSpeak(
+                "请闭上左眼，用右眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。",
+                delay: 0.2
+            )
+        }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Button（全彩渐变款）
+    @ViewBuilder
+    private func cfButton(_ n: Int) -> some View {
+        let isSel = (phase == .right ? selR : selL) == n
+
+        Button {
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
+            record(n)
+        } label: {
+            ZStack {
+                // 底：蓝→青 渐变
+                Circle()
+                    .fill(
+                        LinearGradient(colors: [.cfMainBlue, .cfCyan],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                // 细腻质感：彩色内高光（不用白/黑）
+                Circle()
+                    .strokeBorder(Color.cfHighlight, lineWidth: 1)
+                    .blendMode(.overlay)
+
+                Text("\(n)")
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .kerning(0.5)
+                    .foregroundColor(.white) // 深海蓝文本，避免黑
+            }
+            .frame(width: 56, height: 56)
+            .shadow(color: isSel ? Color.cfGlow : .clear, radius: 10, x: 0, y: 4)
+        }
+        .padding(.bottom, 60)
+        .buttonStyle(CFRoundPressStyle())
+        .accessibilityLabel("选择 \(n) 个灰度")
+    }
+
+    // MARK: - Logic
+    private func record(_ n: Int) {
+        services.speech.stop()
+        let val = cfMap[n] ?? 0.0
+        switch phase {
+        case .right:
+            selR = n
+            state.cfRightD = val
+            services.speech.speak("已记录。", after: 0.05)
+            services.speech.speak("请闭上右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。", after: 0.60)
+            phase = .left
+        case .left:
+            selL = n
+            state.cfLeftD = val
+            services.speech.speak("已记录。", after: 0.05)
+            phase = .done   // 导航交给路由层（监听 cfLeftD 非空）
+        case .done:
+            break
+        }
+    }
+}
+
+// MARK: - Press style（轻微缩放）
+private struct CFRoundPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.18, dampingFraction: 0.9),
+                       value: configuration.isPressed)
+    }
+}
+
+// MARK: - Color helpers
+private extension Color {
+    // 主视觉色
+    static let cfMainBlue   = Color(hex: "#2D6AFF")
+    static let cfCyan       = Color(hex: "#41C8FF")
+
+    // 辅助：描边/高光/发光（均非灰白黑）
+
+    static let cfHighlight  = Color(hex: "#9FDBFF").opacity(0.55)
+    static let cfGlow       = Color(hex: "#89E3FF").opacity(0.55)
+
+    init(hex: String) {
+        var s = hex; if s.hasPrefix("#") { s.removeFirst() }
+        var v: UInt64 = 0; Scanner(string: s).scanHexInt64(&v)
+        self = Color(.sRGB,
+                     red:   Double((v >> 16) & 0xFF) / 255.0,
+                     green: Double((v >>  8) & 0xFF) / 255.0,
+                     blue:  Double( v         & 0xFF) / 255.0,
+                     opacity: 1.0)
+    }
+}
+
+#if DEBUG
+struct CFView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            CFView()
+                .environmentObject(AppState())
+                .environmentObject(AppServices())
+        }
+        .preferredColorScheme(.light)
+    }
+}
+#endif

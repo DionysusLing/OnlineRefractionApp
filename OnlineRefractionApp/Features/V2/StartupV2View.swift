@@ -81,7 +81,6 @@ struct StartupV2View: View {
 
                     Color.clear.frame(height: 150)
 
-                    // 如需保留“开始验光”按钮可留着；完全自动进入就无视它
                     GlowButton(title: "开始验光") { onStart() }
                         .padding(.horizontal, 24)
                         .padding(.top, 6)
