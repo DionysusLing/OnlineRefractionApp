@@ -1,8 +1,7 @@
-// FastResultView.swift — 快速模式 · 结果页（复用主流程 UI + 保存到相册）
 import SwiftUI
 import Photos
 
-// MARK: - 仅负责绘制“快速模式”的白色卡片（竖排版）
+// MARK: - 白色卡片（快速模式）
 private struct FastResultCard: View {
     let pdText: String
     let rSphere: String
@@ -31,17 +30,27 @@ private struct FastResultCard: View {
 
             Divider().padding(.vertical, 1)
 
-            // 右眼（竖排）
-            EyeBlock(title: "右眼",
-                     sphere: rSphere, cyl: rCyl, axis: rAxis, focal: rFocal, cf: rCF)
+            // 右眼
+            EyeBlock(title: "右眼", rows: [
+                ("近视", rSphere),
+                ("散光", rCyl),
+                ("轴向", rAxis),
+                ("焦线", rFocal),
+                ("CF",   rCF),
+            ])
 
             Divider().padding(.vertical, 1)
 
-            // 左眼（竖排）
-            EyeBlock(title: "左眼",
-                     sphere: lSphere, cyl: lCyl, axis: lAxis, focal: lFocal, cf: lCF)
+            // 左眼
+            EyeBlock(title: "左眼", rows: [
+                ("近视", lSphere),
+                ("散光", lCyl),
+                ("轴向", lAxis),
+                ("焦线", lFocal),
+                ("CF",   lCF),
+            ])
 
-            Text("说明：近视度数为0.25D步长取整。")
+            Text("说明：近视度数为 0.25D 步长取整。")
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
@@ -53,7 +62,6 @@ private struct FastResultCard: View {
     }
 }
 
-// 小组件：键值行
 private struct KVRow: View {
     let title: String
     let value: String
@@ -67,28 +75,20 @@ private struct KVRow: View {
     }
 }
 
-// 小组件：单眼信息块（竖排）
 private struct EyeBlock: View {
     let title: String
-    let sphere: String
-    let cyl: String
-    let axis: String
-    let focal: String
-    let cf: String
-
+    let rows: [(String, String)]
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.headline)
-            KVRow(title: "近视", value: sphere)
-            KVRow(title: "散光", value: cyl)
-            KVRow(title: "轴向", value: axis)
-            KVRow(title: "焦线", value: focal)
-            KVRow(title: "CF",  value: cf)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+                KVRow(title: r.0, value: r.1)
+            }
         }
     }
 }
 
-
+// MARK: - 结果页（快速模式）
 struct FastResultView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
@@ -97,43 +97,46 @@ struct FastResultView: View {
     @State private var showAlert = false
     @State private var alertMsg = ""
 
+    // Header 高度与链接颜色（橘色用 .orange）
     private let headerH: CGFloat = 260
+    private let linkColor: Color = .yellow
 
-    // MARK: - 文案生成
+    // 读取 SafeArea 顶部，便于把文字“往上贴”
+    private var safeTop: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets.top ?? 0
+    }
+
+    // MARK: 文案 / 格式化
     private func approxSphere(_ dM: Double?) -> String {
         guard let d = dM, d > 0 else { return "—" }
         let diopter = 1.0 / d
         let rounded = (diopter * 4.0).rounded() / 4.0
-        return String(format: " -%.2f D", rounded)
+        return String(format: "-%.2f D", rounded)
     }
     private func axisText(_ a: Int?) -> String { a.map { "\($0)°" } ?? "—" }
     private func focalTextM(_ m: Double?) -> String { m.map { String(format: "%.2f m", $0) } ?? "—" }
     private var pdText: String { state.fast.pdMM.map { String(format: "%.1f mm", $0) } ?? "—" }
-
-    /// 散光：axis == nil → “0.00 D”（FastCYL 点了“无清晰黑色实线”）；axis != nil → “—”
     private func cylPowerText(for axis: Int?) -> String { axis == nil ? "0.00 D" : "—" }
-
-    // 焦线显示规则（按眼）：
-    // 若该眼散光为“无”(0.00 D) → 焦线显示 “—”；否则按记录的 focalLineDistM 显示。
     private func focalTextForEye(axis: Int?, focalM: Double?) -> String {
-        if axis == nil { return "—" }                // 无散光，不显示焦线
-        return focalTextM(focalM)
+        axis == nil ? "—" : focalTextM(focalM)
     }
 
+    // 卡片视图（复用）
     private var cardView: some View {
-        let rAxisDeg = state.cylR_axisDeg
-        let lAxisDeg = state.cylL_axisDeg
-
+        let rAxis = state.cylR_axisDeg
+        let lAxis = state.cylL_axisDeg
         return FastResultCard(
             pdText: pdText,
             rSphere: approxSphere(state.fast.rightClearDistM),
             lSphere: approxSphere(state.fast.leftClearDistM),
-            rCyl:  cylPowerText(for: rAxisDeg),
-            lCyl:  cylPowerText(for: lAxisDeg),
-            rAxis: axisText(rAxisDeg),
-            lAxis: axisText(lAxisDeg),
-            rFocal: focalTextForEye(axis: rAxisDeg, focalM: state.fast.focalLineDistM),
-            lFocal: focalTextForEye(axis: lAxisDeg, focalM: state.fast.focalLineDistM),
+            rCyl:  cylPowerText(for: rAxis),
+            lCyl:  cylPowerText(for: lAxis),
+            rAxis: axisText(rAxis),
+            lAxis: axisText(lAxis),
+            rFocal: focalTextForEye(axis: rAxis, focalM: state.fast.focalLineDistM),
+            lFocal: focalTextForEye(axis: lAxis, focalM: state.fast.focalLineDistM),
             rCF: state.cfRightText,
             lCF: state.cfLeftText
         )
@@ -141,42 +144,68 @@ struct FastResultView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            V2BlueHeader(
-                title: "验光完成",
-                subtitle: "系统已将配镜度数发给您的配镜服务商",
-                progress: nil,
-                height: headerH
-            )
-            .ignoresSafeArea(edges: .top)
+            // 1) 蓝色头图（只做背景）
+            V2BlueHeader(title: "", subtitle: nil, progress: nil, height: headerH)
+                .ignoresSafeArea(edges: .top)
+                .overlay(alignment: .topLeading) {
+                    // 2) 叠加自绘“标题 + 副标题（带链接）”
+                    VStack(alignment: .leading, spacing: 6) {
+                        Color.clear
+                            .frame(height: 12).allowsHitTesting(false)
+                        Text("快速验光完成")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundColor(.white)
+                        Color.clear
+                            .frame(height: 0).allowsHitTesting(false)
+                        HStack(spacing: 6) {
+                            
+                            Text("快速模式存在一定误差，推荐您使用")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.92))
 
+                            Button {
+                                services.speech.stop()
+                                state.path = [.typeCode]
+                            } label: {
+                                Text("医师模式")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(linkColor)
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle()) // 放大点击区域
+                        }
+                    }
+                    .padding(.leading, 20)          // 左侧位置
+
+                }
+
+            // 3) 白卡 + 底部按钮
             VStack(spacing: 16) {
                 ScrollView(showsIndicators: false) {
                     cardView
                         .padding(.horizontal, 16)
-                        .padding(.top, 16)
+                        .padding(.top, 2)
                         .padding(.bottom, 8)
                 }
+
                 GlowButton(title: isSaving ? "正在保存…" : "保存到相册", disabled: isSaving) {
                     Task { await saveToAlbum() }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
             }
-            .padding(.top, headerH * 0.40)
+            .padding(.top, headerH * 0.40) // 让卡片上移，露出蓝头
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) {
             Button("好", role: .cancel) {}
         } message: { Text(alertMsg) }
-        .onAppear {
-            services.speech.restartSpeak("快速结果已生成。您可以保存验光单到相册。", delay: 0)
-        }
+        .onAppear { services.speech.stop() }     // 进入结果页强制静音
+        .onDisappear { services.speech.stop() }
     }
-}
 
-// MARK: - 保存到相册（同前）
-extension FastResultView {
+    // MARK: 保存到相册（唯一实现）
     private func snapshot<V: View>(_ view: V, size: CGSize) -> UIImage? {
         let host = UIHostingController(rootView: view)
         host.view.bounds = CGRect(origin: .zero, size: size)
@@ -202,22 +231,30 @@ extension FastResultView {
             alertMsg = "生成图片失败。"; showAlert = true; return
         }
 
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        if status == .denied || status == .restricted {
-            alertMsg = "没有相册写入权限，请在系统设置中允许。"; showAlert = true; return
+        // 权限
+        var status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if status == .notDetermined {
+            status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         }
-        if status == .notDetermined { _ = await PHPhotoLibrary.requestAuthorization(for: .addOnly) }
+        guard status == .authorized || status == .limited else {
+            alertMsg = "没有相册写入权限，请在系统设置中允许。"
+            showAlert = true
+            return
+        }
 
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }
             alertMsg = "已保存到相册。"
-        } catch { alertMsg = "保存失败：\(error.localizedDescription)" }
+        } catch {
+            alertMsg = "保存失败：\(error.localizedDescription)"
+        }
         showAlert = true
     }
 }
 
+// MARK: - 预览
 #if DEBUG
 struct FastResultView_Previews: PreviewProvider {
     static var previews: some View {
@@ -227,7 +264,7 @@ struct FastResultView_Previews: PreviewProvider {
         s.fast.leftClearDistM  = 0.66
         s.fast.focalLineDistM  = 0.55
         s.cylR_axisDeg = nil     // 右眼“无清晰实线”→ 散光 0.00D，焦线 —
-        s.cylL_axisDeg = 180     // 左眼做了 5B → 散光 — ，轴向 180°，焦线显示记录值
+        s.cylL_axisDeg = 180     // 左眼做了 5B → 轴向 180°，焦线显示记录值
 
         return FastResultView()
             .environmentObject(AppServices())

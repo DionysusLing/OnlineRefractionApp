@@ -1,95 +1,129 @@
-// FastCYLView.swift — 快速模式 · 散光判断（右眼→左眼）
 import SwiftUI
 import Foundation
 
 struct FastCYLView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
-
-    /// 直接用 TrueDepth 的面距服务（与 FastVision 一致）
     @StateObject private var face = FacePDService()
 
-    /// 当前测哪只眼：.right → .left
     let eye: Eye
+
+    // ===== 引导底（圆形）=====
+    @State private var showCylHintLayer = true
+    @State private var cylHintVisible   = true
+
+    private let cylHintDuration   : Double  = 1.5   // 总时长
+    private let cylHintBlinkCount : Int     = 3     // 闪烁次数
+    private let cylHintOpacity    : Double  = 0.30  // 透明度
+    private let cylHintYOffset    : CGFloat = 0.405  // 圆心纵向位置（0 顶部，0.5 中心）
+    private let cylHintDiameterK  : CGFloat = 0.9  // 直径比例（相对屏宽；1.0 = 屏宽）
+
+    private func startCylHintBlink() {
+        showCylHintLayer = true
+        cylHintVisible = true
+
+        let n = max(1, cylHintBlinkCount)
+        let step = cylHintDuration / Double(n * 2)
+
+        for i in 1...(n * 2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + step * Double(i)) {
+                withAnimation(.easeInOut(duration: max(0.12, step * 0.8))) {
+                    cylHintVisible.toggle()
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + cylHintDuration + 0.01) {
+            showCylHintLayer = false
+        }
+    }
 
     var body: some View {
         ZStack {
             Color.white.ignoresSafeArea()
+            
+                .overlay(alignment: .topLeading) {
+                    MeasureTopHUD(
+                        title: "散光测量",
+                        measuringEye: (eye == .left ? .left : .right)
+                    )
+                }
+            if showCylHintLayer {
+                GeometryReader { g in
+                    let d = g.size.width * cylHintDiameterK // ← 直径比例可调
+                    Circle()
+                        .fill(Color.green.opacity(cylHintOpacity))
+                        .frame(width: d, height: d)
+                        .position(x: g.size.width/2,
+                                  y: g.size.height * cylHintYOffset) // ← 上下位置可调
+                        .opacity(cylHintVisible ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.22), value: cylHintVisible)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
 
             VStack(spacing: 20) {
-                Text("散光判断").font(.title2.bold())
-                Text("请在当前距离观察散光盘，是否有清晰的黑色实线？")
-                    .font(.footnote).foregroundColor(.secondary)
-
-                // 矢量散光盘（虚线放散）
+                Spacer(minLength: 80)
                 CylStarVector(color: .black, lineCap: .butt)
                     .frame(width: 320, height: 320)
 
-                // 两个操作按钮（UI2 Ghost 风格）
-                HStack(spacing: 12) {
-                    GhostActionButtonFast(title: "无清晰黑色实线", enabled: true) {
-                        // 关键：点击“无”时，清空当前眼的轴向，让结果页识别为 0.00D / 轴向 —
-                        if eye == .right {
-                            state.cylR_axisDeg = nil
-                        } else {
-                            state.cylL_axisDeg = nil
-                        }
-                        // 也不记录焦线距离
-                        state.fast.focalLineDistM = nil
+                Spacer()
 
+                VStack(spacing: 12) {
+                    GhostActionButtonFast(title: "无清晰黑色实线", enabled: true) {
+                        if eye == .right { state.cylR_axisDeg = nil } else { state.cylL_axisDeg = nil }
+                        state.fast.focalLineDistM = nil
                         face.stop()
+                        services.speech.restartSpeak("已记录。", delay: 0)
+
                         if eye == .right {
-                            // 右眼无 → 换左眼
                             state.path.append(.fastCYL(.left))
                         } else {
-                            // 左眼无 → 完成本环节
                             state.path.append(.fastResult)
                         }
                     }
 
                     GhostActionButtonFast(title: "在这个距离有清晰实线", enabled: true) {
-                        let d = max(face.distance_m ?? 0, 0.20) // 实时距离（米）
-
-                        // 记录“有”与焦线距离（沿用旧字段，避免与主流程混淆）
+                        let d = max(face.distance_m ?? 0, 0.20)
                         state.fast.cylHasClearLine = true
                         state.fast.focalLineDistM  = d
 
-                        face.stop() // 进主流程前停止 TrueDepth，避免 AR 冲突
+                        face.stop()
+                        services.speech.restartSpeak("已记录。", delay: 0)
 
                         if eye == .right {
-                            // 右眼有 → 去主流程右眼 5B（轴向）；回来回到“快速散光·左眼”
                             state.fastPendingReturnToLeftCYL = true
                             state.path.append(.cylR_B)
                         } else {
-                            // 左眼有 → 去主流程左眼 5B（轴向）；回来回到“快速结果”
                             state.fastPendingReturnToResult = true
                             state.path.append(.cylL_B)
                         }
                     }
                 }
-                .padding(.top, 6)
-
-                // 底部小字（显示实时距离）
-                if let dm = face.distance_m {
-                    Text(String(format: "距 %.2f m", dm))
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 8)
+                .onAppear {
+                    startCylHintBlink()
+                    // 你的原有 onAppear 逻辑（语音/TrueDepth）保持不变
                 }
+                .onDisappear {
+                    showCylHintLayer = false
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
             }
             .padding(.horizontal, 20)
         }
         .onAppear {
-            services.speech.restartSpeak("是否能看到清晰的黑色实线？若有，请点击“在这个距离有清晰实线”。", delay: 0)
             face.start()
+            // ⬇️ 分左右眼播报
+            let txtRight = "请闭上左眼，用右眼观察散光盘。若看到清晰的黑色实线，请点击“在这个距离有清晰实线”；如果没有，请点击“无清晰黑色实线”。"
+            let txtLeft  = "请闭上右眼，用左眼观察散光盘。若看到清晰的黑色实线，请点击“在这个距离有清晰实线”；如果没有，请点击“无清晰黑色实线”。"
+            services.speech.restartSpeak(eye == .right ? txtRight : txtLeft, delay: 0)
         }
-        .onDisappear {
-            face.stop()
-        }
+        .onDisappear { face.stop() }
     }
 }
 
-// UI2 风格“幽灵主按钮”（局部实现；若你已有全局组件，可替换为你的）
+// 复用你的幽灵按钮
 private struct GhostActionButtonFast: View {
     let title: String
     let enabled: Bool
@@ -102,10 +136,7 @@ private struct GhostActionButtonFast: View {
                 .foregroundColor(.white.opacity(enabled ? 0.95 : 0.6))
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(enabled ? 0.78 : 0.35))
-                )
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(enabled ? 0.78 : 0.35)))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)

@@ -21,9 +21,6 @@
 		8C663CFD2E40B65F00B3F48F /* Exceptions for "OnlineRefractionApp" folder in "OnlineRefractionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Features/Prototypes/Astig/AstigFlowView.swift,
-				Features/Prototypes/Astig/AstigVM.swift,
-				Features/V2/CYLAxialV2BView.swift,
 				Info.plist,
 				Services/SpeechServicing.swift,
 			);

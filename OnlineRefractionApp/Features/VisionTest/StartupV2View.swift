@@ -79,7 +79,7 @@ struct StartupV2View: View {
                     }
                     .padding(.top, 4)
 
-                    Color.clear.frame(height: 150)
+                    Color.clear.frame(height: 140)
 
                     GlowButton(title: "开始验光") { onStart() }
                         .padding(.horizontal, 24)

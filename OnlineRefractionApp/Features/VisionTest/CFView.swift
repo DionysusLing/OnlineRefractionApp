@@ -1,10 +1,9 @@
-// Features/V2/CFView.swift
 import SwiftUI
 
-/// 对比敏感度（CF）筛查：三等分灰阶 + 1/2/3 选择；先右眼后左眼
 /// 映射：1 → +0.90 D；2 → +0.55 D；3 → 0.00 D
 struct CFView: View {
     enum EyePhase { case right, left, done }
+    let origin: CFOrigin
 
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
@@ -12,6 +11,8 @@ struct CFView: View {
     @State private var phase: EyePhase = .right
     @State private var selR: Int? = nil
     @State private var selL: Int? = nil
+    
+    @State private var didArmScreen = false
 
     private let cfMap: [Int: Double] = [1: 0.90, 2: 0.55, 3: 0.00]
 
@@ -24,15 +25,6 @@ struct CFView: View {
                 Color(hex: "#E6E6E6")
             }
             .ignoresSafeArea()
-            .overlay(
-                HStack {                      // 细分隔线
-                    Spacer()
-                    Rectangle().fill(Color.black.opacity(0.06)).frame(width: 1)
-                    Spacer()
-                    Rectangle().fill(Color.black.opacity(0.06)).frame(width: 1)
-                    Spacer()
-                }
-            )
 
             // 底部按钮浮层（不占用布局高度，因此不压缩上面的灰阶）
             VStack {
@@ -48,11 +40,28 @@ struct CFView: View {
             .ignoresSafeArea(edges: .bottom)
         }
         .onAppear {
-            // 右眼开场提示
+                    if !didArmScreen {
+                        IdleTimerGuard.shared.begin()
+                        BrightnessGuard.shared.push(to: 0.80)
+                        didArmScreen = true
+                    }
             services.speech.restartSpeak(
                 "请闭上左眼，用右眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。",
                 delay: 0.2
             )
+        }
+        .onDisappear {
+                    if didArmScreen {
+                        BrightnessGuard.shared.pop()
+                        IdleTimerGuard.shared.end()
+                        didArmScreen = false
+                    }
+                }
+        .overlay(alignment: .topLeading) {
+            // phase: .right / .left / .done
+            let hudEye: MeasureTopHUD.EyeSide? =
+                (phase == .right ? .right : (phase == .left ? .left : nil))
+            MeasureTopHUD(title: "白内障检测", measuringEye: hudEye)
         }
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -66,6 +75,7 @@ struct CFView: View {
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             #endif
+            services.speech.stop()
             record(n)
         } label: {
             ZStack {
@@ -95,25 +105,36 @@ struct CFView: View {
 
     // MARK: - Logic
     private func record(_ n: Int) {
-        services.speech.stop()
         let val = cfMap[n] ?? 0.0
         switch phase {
         case .right:
             selR = n
             state.cfRightD = val
-            services.speech.speak("已记录。", after: 0.05)
+            services.speech.restartSpeak("已记录。", delay: 0)
             services.speech.speak("请闭上右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。", after: 0.60)
             phase = .left
         case .left:
             selL = n
             state.cfLeftD = val
-            services.speech.speak("已记录。", after: 0.05)
-            phase = .done   // 导航交给路由层（监听 cfLeftD 非空）
+            services.speech.restartSpeak("已记录。", delay: 0)
+            phase = .done
+
+            // ⬅️ CF 自己决定去向：支流程→快速视力；主流程→散光 5A
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
+                switch origin {
+                case .fast:
+                    state.path.append(.fastVision(.right))
+                case .main:
+                    state.path.append(.cylR_A)
+                }
+            }
+
         case .done:
             break
         }
     }
 }
+
 
 // MARK: - Press style（轻微缩放）
 private struct CFRoundPressStyle: ButtonStyle {
@@ -151,7 +172,7 @@ private extension Color {
 struct CFView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
-            CFView()
+            CFView(origin: .fast)
                 .environmentObject(AppState())
                 .environmentObject(AppServices())
         }

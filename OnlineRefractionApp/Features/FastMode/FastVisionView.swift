@@ -12,12 +12,24 @@ struct FastVisionView: View {
 
     // TrueDepth：面距/PD
     @StateObject private var face = FacePDService()
+    
+    @State private var didArmScreen = false
 
     // E 方向：每 4 秒随机一组
     @State private var orientations: [EOrientation] = [.up, .right, .down, .left]
 
     // 实时距离（米）
     @State private var liveD: Double = 0.20
+    
+    // ===== 引导底（矩形）=====
+    @State private var showVisionHintLayer = true     // 控制是否还保留这层
+    @State private var visionHintVisible   = true     // 控制一次次的显/隐
+
+    private let visionHintDuration : Double  = 1.5    // 总显示时长（秒）
+    private let visionHintBlinkCount: Int    = 3      // 闪烁次数（≥1；均匀分配在总时长内）
+    private let visionHintAspect     : CGFloat = 0.10 // 高宽比：高度 = 屏宽 * 该比例
+    private let visionHintOpacity    : Double  = 0.30 // 透明度 0~1
+    private let visionHintYOffset    : CGFloat = 0.45 // 垂直位置（0 顶部，0.5 中心，1 底部）
 
     // ===== 用 pitch 做“摇头”判定（极简状态机）=====
     @State private var pitchDeg: Double = 0          // 当前 pitch（度）
@@ -27,19 +39,44 @@ struct FastVisionView: View {
     @State private var lastShakeAt = Date.distantPast
     @State private var poseTimer: Timer? = nil
 
+    // ====== 右→左的延时跳转控制 ======
+    @State private var isSwitching = false      // 等待跳转中（防抖）
+    @State private var isAlive = true           // 视图仍在栈顶
+    private let switchDelaySec: Double = 2.0    // 播报后延迟（秒），按需改
+    
     // ===== PD 采样 =====
     @State private var pdSampling = false
     @State private var pdSamples: [Double] = []
     @State private var pdWindowStart: Date?
 
     // 定时器：E方向 4s，轮询 150ms
-    private let eTimer = Timer.publish(every: 4.0, on: .main, in: .common).autoconnect()
+    private let eTimer = Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()
     private let poll   = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
 
     // 参数
-    private let pitchEnter: Double = 15.0     // 进入阈值：> +15 或 < -15
+    private let pitchEnter: Double = 20.0     // 进入阈值：> +15 或 < -15
     private let windowSec: Double  = 2.0      // 2 秒内两侧各一次
     private let cooldown:  Double  = 0.6      // 触发后冷却，避免连发
+    
+    private func startVisionHintBlink() {
+        showVisionHintLayer = true
+        visionHintVisible = true
+
+        let n = max(1, visionHintBlinkCount)
+        let step = visionHintDuration / Double(n * 2) // 显/隐各 step 秒
+
+        for i in 1...(n * 2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + step * Double(i)) {
+                withAnimation(.easeInOut(duration: max(0.12, step * 0.8))) {
+                    visionHintVisible.toggle()
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + visionHintDuration + 0.01) {
+            showVisionHintLayer = false
+        }
+    }
+
 
     var body: some View {
         GeometryReader { geo in
@@ -52,13 +89,22 @@ struct FastVisionView: View {
 
             ZStack {
                 Color.white.ignoresSafeArea()
+                if showVisionHintLayer {
+                    GeometryReader { g in
+                        RoundedRectangle(cornerRadius: 0)
+                            .fill(Color.green.opacity(visionHintOpacity))
+                            .frame(width: g.size.width,
+                                   height: g.size.width * visionHintAspect)
+                            .position(x: g.size.width/2,
+                                      y: g.size.height * visionHintYOffset) // ← 上下位置可调
+                            .opacity(visionHintVisible ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.22), value: visionHintVisible)
+                    }
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
 
                 VStack(spacing: 8) {
-                    // 顶部：当前测眼
-                    Text(eye == .right ? "右眼" : "左眼")
-                        .font(.title2.bold())
-                        .padding(.top, 8)
-
                     Spacer(minLength: 12)
 
                     // 中部：横排 4 个 E
@@ -90,11 +136,28 @@ struct FastVisionView: View {
                     .foregroundColor(.secondary)
                     .padding(.bottom, 10)
                 }
+                .onAppear {
+                    startVisionHintBlink()
+                }
+                .onDisappear {
+                    showVisionHintLayer = false
+                }
+                .overlay(alignment: .topLeading) {
+                    MeasureTopHUD(
+                        title: "视力测量",
+                        measuringEye: (eye == .left ? .left : .right)
+                    )
+                }
             }
         }
         .onAppear {
+            if !didArmScreen {
+                IdleTimerGuard.shared.begin()
+                BrightnessGuard.shared.push(to: 0.80)
+                didArmScreen = true
+            }
             services.speech.restartSpeak(
-                "请由近推远移动手机，观察E视标。看不清开口方向时，请上下点头表示看不清了。先测\(eye == .right ? "右眼" : "左眼")。",
+                "请由近推远移动手机，观察意视标。看不清意的开口方向时，请左右摇头表示看不清了。测\(eye == .right ? "右眼" : "左眼")。",
                 delay: 0
             )
             face.start()
@@ -106,9 +169,16 @@ struct FastVisionView: View {
             pdWindowStart = nil
         }
         .onDisappear {
+            isAlive = false
+            isSwitching = false          // 视图离开就取消等待
             poseTimer?.invalidate(); poseTimer = nil
             face.stop()
             pdSampling = false
+            if didArmScreen {
+                BrightnessGuard.shared.pop()
+                IdleTimerGuard.shared.end()
+                didArmScreen = false
+            }
         }
         .onReceive(eTimer) { _ in
             orientations = [.up, .right, .down, .left].shuffled()
@@ -157,7 +227,7 @@ struct FastVisionView: View {
         }
     }
 
-    // MARK: - 渲染 E（只画核心，无外框）
+    // MARK: - 渲染 E
     @ViewBuilder
     private func eCell(_ ori: EOrientation, side: CGFloat) -> some View {
         VisualAcuityEView(
@@ -218,6 +288,9 @@ struct FastVisionView: View {
 
     // MARK: - 触发一次“摇头”
     private func triggerShake(atDistance d: Double) {
+        // 防抖：如果已经在等待跳转，就忽略后续触发
+        if isSwitching { return }
+
         lastShakeAt = Date()
         windowStart = nil; seenNeg = false; seenPos = false
 
@@ -225,18 +298,27 @@ struct FastVisionView: View {
         if eye == .right { state.fast.rightClearDistM = dist }
         else             { state.fast.leftClearDistM  = dist }
 
-        if state.fast.pdMM != nil {
-            if eye == .right {
-                services.speech.restartSpeak("已记录，换左眼，方法相同。", delay: 0)
+        guard state.fast.pdMM != nil else {
+            services.speech.restartSpeak("正在测量瞳距，请稍等。", delay: 0)
+            return
+        }
+
+        if eye == .right {
+            // ① 右眼完成：先播报，再延迟 2 秒进入左眼
+            services.speech.restartSpeak("已记录，换测左眼，方法相同。", delay: 0)
+            isSwitching = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + switchDelaySec) {
+                guard isAlive && isSwitching else { return }   // 仍在当前页且未被取消
+                isSwitching = false
                 state.path.append(.fastVision(.left))
-            } else {
-                services.speech.restartSpeak("已记录，接下来判断散光。", delay: 0)
-                state.path.append(.fastCYL(.right))
             }
         } else {
-            services.speech.restartSpeak("正在测量瞳距，请稍等。", delay: 0)
+            // ② 左眼完成：保持你原来的即时跳转（如需也延时，同理处理）
+            services.speech.restartSpeak("已记录，接下来测散光。", delay: 0)
+            state.path.append(.fastCYL(.right))
         }
     }
+
 
     // MARK: - 20/20（5′）→ points（严格物理）
     private func e20LetterHeightPoints(distanceM d: CGFloat) -> CGFloat {

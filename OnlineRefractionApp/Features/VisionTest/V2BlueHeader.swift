@@ -117,4 +117,78 @@ fileprivate struct StripesGloss: View {
         }
         .allowsHitTesting(false)
     }
+    
+    struct V2BlueHeader: View {
+        let title: String
+        let progress: Double?
+        let height: CGFloat
+        
+        // 兼容旧用法：纯字符串副标题
+        private let subtitleString: String?
+        // 新用法：自定义视图副标题
+        private let subtitleCustom: AnyView?
+        
+        // 旧 API（不改你的既有页面）
+        init(title: String,
+             subtitle: String? = nil,
+             progress: Double? = nil,
+             height: CGFloat = 260) {
+            self.title = title
+            self.subtitleString = subtitle
+            self.progress = progress
+            self.height = height
+            self.subtitleCustom = nil
+        }
+        
+        // 新 API：自定义副标题视图（比如把某几个字做成按钮）
+        init(title: String,
+             progress: Double? = nil,
+             height: CGFloat = 260,
+             @ViewBuilder subtitleView: () -> some View) {
+            self.title = title
+            self.progress = progress
+            self.height = height
+            self.subtitleString = nil
+            self.subtitleCustom = AnyView(subtitleView())
+        }
+        
+        var body: some View {
+            ZStack(alignment: .bottomLeading) {
+                // 你原来的渐变背景等…
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.20, green: 0.60, blue: 1.00),
+                        Color(red: 0.10, green: 0.45, blue: 0.95)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    if let subtitleCustom {                      // 优先使用自定义视图
+                        subtitleCustom
+                    } else if let subtitleString {
+                        Text(subtitleString)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                    
+                    if let p = progress {
+                        ProgressView(value: p)
+                            .tint(.white)
+                            .frame(maxWidth: 220)
+                            .opacity(0.9)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+            .frame(height: height)
+        }
+    }
 }

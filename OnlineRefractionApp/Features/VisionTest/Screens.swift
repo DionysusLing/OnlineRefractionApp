@@ -480,6 +480,7 @@ struct ResultV2View: View {
     let leftWhite: Double?
 
     @EnvironmentObject var state: AppState
+    @EnvironmentObject var services: AppServices
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
@@ -521,6 +522,12 @@ struct ResultV2View: View {
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) { Button("好", role: .cancel) {} } message: { Text(alertMsg) }
+        .onAppear {
+            services.speech.stop() // ← 进入主结果页时强制静音
+        }
+        .onDisappear {
+            services.speech.stop()
+        }
     }
 
     private func saveToAlbum() async {
