@@ -56,7 +56,7 @@ public struct VAFlowView: View {
                 .onAppear {
                                     // ✅ 进入界面8：防熄屏 + 提亮
                                     IdleTimerGuard.shared.begin()
-                    BrightnessGuard.shared.push(to: 0.85)   // 需要的话改成 0.85
+                    BrightnessGuard.shared.push(to: 0.70)   // 需要的话改成 0.85
                                     vm.onAppearDistance(services)
                                 }
                                 .onDisappear {
@@ -71,7 +71,7 @@ public struct VAFlowView: View {
                     .onAppear {
                                             // ✅ 进入界面9/10：同样防熄屏 + 提亮
                                             IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.85)
+                        BrightnessGuard.shared.push(to: 0.70)
                                             vm.onAppearTest(services, theme: .blue, eye: .right)
                                         }
                                         .onDisappear {
@@ -84,7 +84,7 @@ public struct VAFlowView: View {
                 VATestPage(vm: vm, theme: .blue, eye: .left)
                     .onAppear {
                         IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.85)
+                        BrightnessGuard.shared.push(to: 0.70)
                         vm.onAppearTest(services, theme: .blue, eye: .left)
                     }
                     .onDisappear {
@@ -97,7 +97,7 @@ public struct VAFlowView: View {
                 VATestPage(vm: vm, theme: .white, eye: .right)
                     .onAppear {
                                             IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.85)
+                        BrightnessGuard.shared.push(to: 0.70)
                                             vm.onAppearTest(services, theme: .white, eye: .right)
                                         }
                                         .onDisappear {

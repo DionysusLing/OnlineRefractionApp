@@ -26,9 +26,9 @@ struct FastVisionView: View {
     @State private var visionHintVisible   = true     // 控制一次次的显/隐
 
     private let visionHintDuration : Double  = 1.5    // 总显示时长（秒）
-    private let visionHintBlinkCount: Int    = 3      // 闪烁次数（≥1；均匀分配在总时长内）
+    private let visionHintBlinkCount: Int    = 4      // 闪烁次数（≥1；均匀分配在总时长内）
     private let visionHintAspect     : CGFloat = 0.10 // 高宽比：高度 = 屏宽 * 该比例
-    private let visionHintOpacity    : Double  = 0.30 // 透明度 0~1
+    private let visionHintOpacity    : Double  = 0.40 // 透明度 0~1
     private let visionHintYOffset    : CGFloat = 0.45 // 垂直位置（0 顶部，0.5 中心，1 底部）
 
     // ===== 用 pitch 做“摇头”判定（极简状态机）=====
@@ -44,6 +44,11 @@ struct FastVisionView: View {
     @State private var isAlive = true           // 视图仍在栈顶
     private let switchDelaySec: Double = 2.0    // 播报后延迟（秒），按需改
     
+    // ===== 环境光门控（lux）=====
+    private let minLux: Double = 100       // 阈值：300 lux 起提示（可按需调）
+    @State private var darkStart: Date? = nil
+    @State private var darkWarned = false
+    
     // ===== PD 采样 =====
     @State private var pdSampling = false
     @State private var pdSamples: [Double] = []
@@ -52,9 +57,15 @@ struct FastVisionView: View {
     // 定时器：E方向 4s，轮询 150ms
     private let eTimer = Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()
     private let poll   = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    
+    // ===== 近距离停留告警 =====
+    private let nearThresholdM: Double = 0.25
+    private let nearHoldSec:    Double = 5.0
+    @State private var nearStart: Date? = nil
+    @State private var nearWarned: Bool = false
 
     // 参数
-    private let pitchEnter: Double = 20.0     // 进入阈值：> +15 或 < -15
+    private let pitchEnter: Double = 15.0     // 进入阈值：> +15 或 < -15
     private let windowSec: Double  = 2.0      // 2 秒内两侧各一次
     private let cooldown:  Double  = 0.6      // 触发后冷却，避免连发
     
@@ -86,7 +97,7 @@ struct FastVisionView: View {
             let sidePt = e20LetterHeightPoints(distanceM: CGFloat(liveD))
             // 4 个 E + 3 个间隔(=边长) → 7*side
             let side = min(sidePt, availableW / 7.0)
-
+            
             ZStack {
                 Color.white.ignoresSafeArea()
                 if showVisionHintLayer {
@@ -103,10 +114,10 @@ struct FastVisionView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
-
+                
                 VStack(spacing: 8) {
                     Spacer(minLength: 12)
-
+                    
                     // 中部：横排 4 个 E
                     HStack(spacing: side) {
                         eCell(orientations[0], side: side)
@@ -115,13 +126,13 @@ struct FastVisionView: View {
                         eCell(orientations[3], side: side)
                     }
                     .padding(.horizontal, padding)
-
+                    
                     Spacer(minLength: 12)
-
+                    
                     // 底部：距离 & PD + 调试
                     VStack(spacing: 2) {
-                        Text(String(format: "距 %.2f m", liveD))
-                        Text("PD: " + (state.fast.pdMM.map { String(format: "%.1f mm", $0) } ?? "测量中…"))
+                        Text(String(format: "距离 %.2f m", liveD))
+                        Text("瞳距: " + (state.fast.pdMM.map { String(format: "%.1f mm", $0) } ?? "测量中…"))
                         // 调试：pitch & 窗口状态
                         let inWin = windowStart != nil
                         Text(String(format: "pitch %+6.1f°   seenNeg %@   seenPos %@   win %@",
@@ -129,8 +140,14 @@ struct FastVisionView: View {
                                     seenNeg ? "✓" : "×",
                                     seenPos ? "✓" : "×",
                                     inWin ? "✓" : "×"))
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundColor(.secondary)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        
+                        if let lux = face.ambientLux {
+                            Text(String(format: "环境照度 ≈ %.0f lux", lux))
+                                .font(.footnote)
+                                .foregroundColor(lux < minLux ? .gray : .secondary)
+                        }
                     }
                     .font(.footnote)
                     .foregroundColor(.secondary)
@@ -163,10 +180,14 @@ struct FastVisionView: View {
             face.start()
             startPoseTimer()                                 // 30Hz 姿态轮询
             liveD = max(face.distance_m ?? 0, 0.20)
-
+            
             pdSampling = false
             pdSamples.removeAll()
             pdWindowStart = nil
+            darkStart = nil
+            darkWarned = false
+            nearStart = nil
+            nearWarned = false
         }
         .onDisappear {
             isAlive = false
@@ -174,6 +195,7 @@ struct FastVisionView: View {
             poseTimer?.invalidate(); poseTimer = nil
             face.stop()
             pdSampling = false
+            nearStart = nil
             if didArmScreen {
                 BrightnessGuard.shared.pop()
                 IdleTimerGuard.shared.end()
@@ -187,8 +209,42 @@ struct FastVisionView: View {
             // 距离 → 驱动 UI
             let d = max(face.distance_m ?? 0, 0.20)
             liveD = d
-
-            // —— PD：>20cm 1s 窗口，最多 3 样本
+            
+            // ① 近距离停留告警（<25cm 连续 5s，播报一次）
+            if d < nearThresholdM {
+                if nearStart == nil {
+                    nearStart = Date()
+                } else if !nearWarned, let start = nearStart,
+                          Date().timeIntervalSince(start) >= nearHoldSec {
+                    nearWarned = true
+                    services.speech.restartSpeak("你或需极近距离才能测量，请转用医师模式。", delay: 0)
+                }
+            } else {
+                nearStart = nil   // ← 距离恢复后重置计时，避免误触发
+            }
+            
+            // ② 环境光判定（< minLux 连续 1s 提示；并暂停 PD 采样）
+            if let lux = face.ambientLux {
+                if lux < minLux {
+                    if darkStart == nil { darkStart = Date() }
+                    if !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
+                        darkWarned = true
+                        services.speech.restartSpeak("环境光偏暗，影响瞳距测量精度，请开灯或移至更亮处。", delay: 0)
+                    }
+                    // 暗光下暂停/清空 PD 窗口，避免写入抖动数据
+                    if pdSampling {
+                        pdSampling = false
+                        pdWindowStart = nil
+                        pdSamples.removeAll()
+                    }
+                    // 若希望暗光时完全不做 PD，可在此处直接 `return`
+                    // return
+                } else {
+                    darkStart = nil // 亮度恢复后重新计时（本次已提醒不重复）
+                }
+            }
+            
+            // ③ PD：>20cm 1s 窗口，最多 3 样本
             if state.fast.pdMM == nil {
                 if d > 0.20 {
                     if !pdSampling {
@@ -214,11 +270,10 @@ struct FastVisionView: View {
                     pdSamples.removeAll()
                 }
             }
-
-            // —— 简单摇头规则：2 秒窗口内 pitch<-15 与 >+15 各一次
+            
+            // ④ 简单摇头规则：2 秒窗口内 pitch<-15 与 >+15 各一次
             let now = Date()
             if let start = windowStart, now.timeIntervalSince(start) > windowSec {
-                // 窗口过期 → 清空，准备下一轮
                 windowStart = nil; seenNeg = false; seenPos = false
             }
             if windowStart != nil, seenNeg, seenPos, now.timeIntervalSince(lastShakeAt) > cooldown {
@@ -226,7 +281,6 @@ struct FastVisionView: View {
             }
         }
     }
-
     // MARK: - 渲染 E
     @ViewBuilder
     private func eCell(_ ori: EOrientation, side: CGFloat) -> some View {
@@ -299,7 +353,7 @@ struct FastVisionView: View {
         else             { state.fast.leftClearDistM  = dist }
 
         guard state.fast.pdMM != nil else {
-            services.speech.restartSpeak("正在测量瞳距，请稍等。", delay: 0)
+            services.speech.restartSpeak("仍在测量瞳距，请稍等。", delay: 0)
             return
         }
 

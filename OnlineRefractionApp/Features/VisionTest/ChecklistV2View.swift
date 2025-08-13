@@ -9,51 +9,42 @@ struct RowMeta {
     let symbol: String
     let title: String
     let tone: BadgeTone
-    let isAutoBrightness: Bool
 }
 
 // MARK: - 主视图
 struct ChecklistV2View: View {
     @EnvironmentObject var services: AppServices
-    @Environment(\.scenePhase) private var scenePhase
 
     var onNext: () -> Void
-    init(onNext: @escaping () -> Void = {}) { self.onNext = onNext }
+    init(onNext: @escaping () -> Void = {}) {
+        self.onNext = onNext
+        // items 与 metas 数量保持一致
+        self._items = State(initialValue: Array(repeating: false, count: metas.count))
+    }
 
-    // 8 项勾选
-    @State private var items = Array(repeating: false, count: 8)
-    @State private var didAdvance = false
-
-    // 弹窗 & 引导
-    @State private var showGuide = false            // “如何关闭自动亮度”说明
-    @State private var askConfirm = false           // 回来后的确认
-
-    // —— 与原 Screens 一致的持久化标记 —— //
-    @AppStorage("resumeFromSettings") private var resumeFromSettings = false
-    @AppStorage("needConfirmAutoBrightness") private var needConfirmAutoBrightness = false
+    // 各项勾选状态（数量 = metas.count）
+    @State private var items: [Bool]
 
     // 头图高度（和其它 v2 页面对齐）
     private let headerH: CGFloat = 180
 
-    // 8 条元数据（把“关闭自动亮度”固定放最后一项）
-    
+    // 7 条元数据（已移除“关闭手机屏幕自动亮度”）
     fileprivate let metas: [RowMeta] = [
-        .init(symbol: "camera.aperture",      title: "有可竖直固定手机的支架/装置",   tone: .ok,      isAutoBrightness: false),
-        .init(symbol: "lightbulb.max",        title: "在安静“明亮办公室”环境", tone: .ok,      isAutoBrightness: false),
-        .init(symbol: "sun.max.trianglebadge.exclamationmark", title: "前后方亮度均匀无大反差光线", tone: .ok, isAutoBrightness: false),
-        .init(symbol: "zzz",      title: "没处于酒后、疲劳、虚弱等",       tone: .neutral, isAutoBrightness: false),
-        .init(symbol: "sun.min",              title: "过去2小时无强光下长时间用眼", tone: .neutral, isAutoBrightness: false),
-        .init(symbol: "figure.run",           title: "过去2小时无剧烈运动",       tone: .neutral, isAutoBrightness: false),
-        .init(symbol: "eye.trianglebadge.exclamationmark", title: "眼部没有生理性异常或病变", tone: .neutral, isAutoBrightness: false),
-        .init(symbol: "sun.max",              title: "关闭手机屏幕自动亮度",           tone: .caution, isAutoBrightness: true)
+        .init(symbol: "camera.aperture",      title: "有可竖直固定手机的支架/装置",   tone: .ok),
+        .init(symbol: "lightbulb.max",        title: "在安静“明亮办公室”环境",       tone: .ok),
+        .init(symbol: "sun.max.trianglebadge.exclamationmark", title: "前后方亮度均匀无大反差光线", tone: .ok),
+        .init(symbol: "zzz",                  title: "没处于酒后、疲劳、虚弱等",       tone: .neutral),
+        .init(symbol: "sun.min",              title: "过去2小时无强光下长时间用眼",   tone: .neutral),
+        .init(symbol: "figure.run",           title: "过去2小时无剧烈运动",           tone: .neutral),
+        .init(symbol: "eye.trianglebadge.exclamationmark", title: "眼部没有生理性异常或病变", tone: .neutral)
     ]
-    private var autoIndex: Int { metas.firstIndex(where: { $0.isAutoBrightness }) ?? 7 }
+
+    private var allChecked: Bool { items.allSatisfy { $0 } }
 
     var body: some View {
         ZStack(alignment: .top) {
             ThemeV2.Colors.page.ignoresSafeArea()
 
-            // 顶部蓝底（无副标题、无进度）
             V2BlueHeader(title: "环境检查", subtitle: nil, progress: nil)
                 .frame(height: headerH)
                 .frame(maxWidth: .infinity)
@@ -62,111 +53,44 @@ struct ChecklistV2View: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
                     // 避开头部
-                    Color.clear.frame(height: headerH * 0.30)
+                    Color.clear.frame(height: headerH * 0.37)
 
-                    // Warning 提示（强调样式）
-                    warningBar
-
-                    // 列表 8 项
+                    // 列表
                     listSection
 
-                    // 语音按钮（保留）
+                    Spacer(minLength: 18)
+                    // 底部主按钮（先）
+                    GlowButton(title: "要求符合", disabled: false) {
+                        onNext()
+                    }
+                    .padding(.top, 8)
+
+                    // 语音按钮（后）
                     HStack { Spacer(); SpeakerView(); Spacer() }
                         .padding(.top, 8)
+
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
             }
         }
-        // —— 生命周期 & 语音，与原逻辑一致 —— //
         .onAppear {
-            if resumeFromSettings, needConfirmAutoBrightness {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    askConfirm = true
-                }
-            }
             services.speech.restartSpeak(
-                "请逐条确认以下条件。最后一项需要在设置里关闭自动亮度。全部打勾后将自动进入下一步。",
+                "请逐条确认以下条件。良好的条件是准确验光的必要基础。",
                 delay: 0.60
             )
-        }
-        .onChange(of: scenePhase) { phase, _ in
-            if phase == .active, resumeFromSettings, needConfirmAutoBrightness {
-                askConfirm = true
-            }
-        }
-        .onChange(of: items) { _, newValue in
-            guard !didAdvance, newValue.allSatisfy({ $0 }) else { return }
-            didAdvance = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                onNext()
-            }
-        }
-        .alert("如何关闭“自动亮度”", isPresented: $showGuide) {
-            Button("前往设置") {
-                resumeFromSettings = true
-                needConfirmAutoBrightness = true
-                openAppSettings()
-            }
-            Button("我再看看", role: .cancel) {}
-        } message: {
-            Text("路径：设置 → 辅助功能 → 显示与文字大小 → 关闭“自动亮度”")
-        }
-        .confirmationDialog("已关闭“自动亮度”吗？", isPresented: $askConfirm, titleVisibility: .visible) {
-            Button("已关闭") {
-                items[autoIndex] = true
-                needConfirmAutoBrightness = false
-                resumeFromSettings = false
-            }
-            Button("还没有", role: .cancel) { }
         }
     }
 
     // MARK: - 子块
-
-    // 黄色强调提示
-    @ViewBuilder private var warningBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(Color(red: 1.0, green: 0.10, blue: 0.1)) // 图标黄
-            Text("重要：需要您手动在设置里关闭屏幕自动亮度。     ")
-                .font(ThemeV2.Fonts.note(.semibold))
-                .foregroundColor(Color(red: 0.20, green: 0.18, blue: 0.05)) // 深色字，黄底更清晰
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(red: 1.00, green: 0.98, blue: 0.80).opacity(0.98)) // 柔和黄底
-            
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color(red: 0.98, green: 0.85, blue: 0.35), lineWidth: 1) // 黄色描边
-        )
-    }
 
     // 列表
     @ViewBuilder private var listSection: some View {
         ForEach(metas.indices, id: \.self) { i in
             ChecklistRowV2(meta: metas[i], checked: items[i])
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    if metas[i].isAutoBrightness {
-                        showGuide = true
-                    } else {
-                        items[i].toggle()
-                    }
-                }
+                .onTapGesture { items[i].toggle() }
         }
-    }
-
-    // 跳系统设置
-    private func openAppSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString),
-              UIApplication.shared.canOpenURL(url) else { return }
-        UIApplication.shared.open(url)
     }
 }
 
@@ -186,8 +110,10 @@ private struct ChecklistRowV2: View {
 
             Spacer()
 
-            SafeImage(checked ? Asset.chUnchecked : Asset.chChecked,
-                      size: .init(width: 20, height: 20))
+            SafeImage(checked ? Asset.chChecked : Asset.chUnchecked, size: .init(width: 20, height: 20))
+                .foregroundStyle(checked ? ThemeV2.Colors.brandBlue : ThemeV2.Colors.subtext.opacity(0.45))
+
+
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 14)
@@ -205,15 +131,15 @@ private struct BadgeIcon: View {
 
     private var bgColor: Color {
         switch tone {
-        case .caution: return Color(red: 1.00, green: 0.98, blue: 0.80)     // 柔和黄
-        case .ok: return Color(red: 0.20, green: 0.70, blue: 0.60) // 淡蓝
+        case .caution: return Color(red: 1.00, green: 0.98, blue: 0.80)    // 柔和黄
+        case .ok:      return Color(red: 0.20, green: 0.70, blue: 0.60)    // 淡蓝
         case .neutral: return ThemeV2.Colors.slate50
         }
     }
 
     private var fgColor: Color {
         switch tone {
-        case .caution: return Color(red: 0.20, green: 0.18, blue: 0.05)     // 深色字
+        case .caution: return Color(red: 0.20, green: 0.18, blue: 0.05)    // 深色字
         case .ok:      return .white
         case .neutral: return ThemeV2.Colors.subtext
         }

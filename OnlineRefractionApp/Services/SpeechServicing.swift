@@ -51,6 +51,38 @@ final class SpeechService: ObservableObject, SpeechServicing {
         }
     }
 
+    
+    protocol SpeechServicing {
+        func speak(_ text: String)
+        func stop()
+        func restartSpeak(_ text: String, delay: TimeInterval)
+        func cancelPending()
+    }
+
+    final class SpeechService: SpeechServicing {
+        private var pending: DispatchWorkItem?
+
+        func restartSpeak(_ text: String, delay: TimeInterval = 0) {
+            cancelPending()
+            stop()
+            let work = DispatchWorkItem { [weak self] in self?.speak(text) }
+            pending = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        }
+
+        func cancelPending() {
+            pending?.cancel(); pending = nil
+        }
+
+        func stop() {
+            // 停止当前 TTS
+        }
+
+        func speak(_ text: String) {
+            // 播报实现
+        }
+    }
+
     // MARK: - API
 
     func speak(_ text: String) {

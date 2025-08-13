@@ -46,7 +46,7 @@ struct CFView: View {
                         didArmScreen = true
                     }
             services.speech.restartSpeak(
-                "请闭上左眼，用右眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。",
+                "请闭上左眼，用右眼观察屏幕并点击数字报告你在屏幕上看到多少档灰度。",
                 delay: 0.2
             )
         }
@@ -100,7 +100,7 @@ struct CFView: View {
         }
         .padding(.bottom, 60)
         .buttonStyle(CFRoundPressStyle())
-        .accessibilityLabel("选择 \(n) 个灰度")
+        .accessibilityLabel("选择 \(n) 档灰度")
     }
 
     // MARK: - Logic
@@ -111,7 +111,7 @@ struct CFView: View {
             selR = n
             state.cfRightD = val
             services.speech.restartSpeak("已记录。", delay: 0)
-            services.speech.speak("请闭上右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到多少种灰度。", after: 0.60)
+            services.speech.speak("请闭上右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到多少档灰度。", after: 0.60)
             phase = .left
         case .left:
             selL = n

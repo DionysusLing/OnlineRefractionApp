@@ -142,15 +142,23 @@ struct CYLAxialV2B: View {
             VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 12)
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .pagePadding()
-        .onAppear {
-            guard !didSpeak else { return }
-            didSpeak = true
-            services.speech.stop()
-            services.speech.restartSpeak("请点击散光盘上与清晰黑色实线方向最靠近的数字。", delay: 0.35)
+        .overlay(alignment: .topTrailing) {
+                MeasureTopHUD(
+                    title: "",  // 或者：title: nil
+                    measuringEye: (eye == .left ? .left : .right)
+                )
+                .padding(.top, 36)
+                .padding(.trailing, 0)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .pagePadding()
+            .onAppear {
+                guard !didSpeak else { return }
+                didSpeak = true
+                services.speech.stop()
+                services.speech.restartSpeak("请点击散光盘上与清晰黑色实线方向最靠近的数字。", delay: 0.35)
+            }
         }
-    }
     
     // MARK: - 交互
     private func select(_ v: Double) {
@@ -248,3 +256,22 @@ fileprivate struct GreenBadge: View {
     }
 }
 
+
+
+
+//================
+#if DEBUG
+struct CYLAxialV2B_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            CYLAxialV2B(eye: .right)   // ← 强制第二阶段
+                .previewDisplayName("散光盘A · 右眼 · 矢量")
+            CYLAxialV2B(eye: .left)
+                .previewDisplayName("散光盘A · 左眼 · 矢量")
+        }
+        .environmentObject(AppState())
+        .environmentObject(AppServices())
+        .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif

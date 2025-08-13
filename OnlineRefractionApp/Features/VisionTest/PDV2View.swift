@@ -2,6 +2,8 @@ import SwiftUI
 import Combine
 import ARKit
 import simd
+import UIKit
+
 
 /// v2 · PD 测量（1/3、2/3、3/3）
 /// 进入即开始：循环调用 `captureOnce`，拿到 IPD 即播报并跳转。
@@ -10,8 +12,11 @@ struct PDV2View: View {
     let index: Int
     var onFinish: (Double?) -> Void = { _ in }
 
-    // 真实 PD 服务（旧工程一致）
+    // 真实 PD 服务
     @StateObject private var pdSvc = FacePDService()
+    
+    // 震动发生
+    @State private var hapticSuccess = UINotificationFeedbackGenerator()
 
     // UI 状态
     @State private var isCapturing = false
@@ -19,6 +24,11 @@ struct PDV2View: View {
     @State private var hasResult = false
     @State private var spin = false
     @State private var ticksRotation: Double = 0
+    
+    // ===== 环境光门控（lux）=====
+    private let minLux: Double = 90            // 阈值：≥90 lux 才允许抓取 PD（可按需调）
+    @State private var darkStart: Date? = nil   // 连续暗光计时起点
+    @State private var darkWarned = false       // 仅提示一次
 
     // 三轴显示（中下部）
     @State private var yawDeg: Double = 0
@@ -46,7 +56,25 @@ struct PDV2View: View {
         let mm = m * 1000.0
         return abs(mm - targetMM) <= tolMM
     }
-    private var canCaptureNow: Bool { distanceOK && headPoseOK }
+
+    // ★ 环境光放行：ambientLux ≥ minLux 才允许抓取
+    private var brightOK: Bool {
+        guard let lux = pdSvc.ambientLux else { return false }
+        return lux >= minLux
+    }
+
+    // ★ 最终放行门：距离 + 姿态 + 亮度
+    private var canCaptureNow: Bool { distanceOK && headPoseOK && brightOK }
+    // ★ 显示用便捷计算（可调色）
+    private var luxDisplay: (text: String, color: Color) {
+        guard let lux = pdSvc.ambientLux else {
+            return ("光照：-- lux（需 ≥ \(Int(minLux))）", .secondary)
+        }
+        let ok = lux >= minLux
+        let txt = String(format: "光照 %@ · ≈ %.0f lux · 需 ≥ %.0f",
+                         ok ? "OK" : "偏暗", lux, minLux)
+        return (txt, ok ? .green : (lux >= minLux * 0.7 ? .orange : .red))
+    }
 
     // 三轴轮询
     @State private var poseTimer: Timer?
@@ -85,9 +113,14 @@ struct PDV2View: View {
                 startPoseTimer()
                 startAutoCaptureLoop()
             }
+            hapticSuccess.prepare()
         }
         .onDisappear {
             poseTimer?.invalidate(); poseTimer = nil
+            pdSvc.stop() // 收尾 TrueDepth
+            // 重置一次环境光提示状态，避免下次进入“已提示”不再播报
+            darkStart = nil
+            darkWarned = false
         }
         // 顶部中间：横向距离条（越接近 35cm 越短）
         .overlay(alignment: .center) {
@@ -125,7 +158,7 @@ struct PDV2View: View {
                         .opacity(0.8)
                         .frame(width: d, height: d)
 
-                    // 圆形取景
+                    // 圆形取景（人脸预览）
                     FacePreviewView(arSession: pdSvc.arSession)
                         .clipShape(Circle())
                         .frame(width: d, height: d)
@@ -164,7 +197,7 @@ struct PDV2View: View {
                         .allowsHitTesting(false)
                 )
 
-                // 圆下指标：距离 / PD
+                // 圆下指标：距离 / PD（保持原位置）
                 InfoBar(
                     tone: hasResult ? .ok : .info,
                     text: String(
@@ -177,9 +210,37 @@ struct PDV2View: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, 6)
-            // 中下部：正脸状态 + 三轴读数
+            // 底部叠加：光照（新样式） + 正脸
             .overlay(alignment: .bottom) {
-                VStack(spacing: 6) {
+                VStack(spacing: 10) {
+                    // —— 光照（与“正脸”一致的胶囊样式；无数值、短灰条）——
+                    let lux = pdSvc.ambientLux ?? 0
+                    let ok = lux >= minLux
+                    let ratio = min(1.0, max(0.0, lux / minLux))  // 相对达标程度
+                    let barW: CGFloat = 160                       // 短进度条宽度
+
+                    HStack(spacing: 10) {
+                        Text(ok ? "光照 ✓" : "光照 ×")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(ok ? .green : .red)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Color.white.opacity(0.10))
+                            .cornerRadius(8)
+
+                        Text(ok ? "达标" : "偏暗")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.85))
+
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.14))
+                                .frame(width: barW, height: 6)
+                            Capsule().fill(Color.white.opacity(0.55))
+                                .frame(width: barW * ratio, height: 6)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                    // —— 正脸状态 + 三轴 ——（保持你原样式）
                     HStack(spacing: 8) {
                         Text(headPoseOK ? "正脸 ✓" : "正脸 ×")
                             .font(.system(size: 14, weight: .semibold))
@@ -191,22 +252,26 @@ struct PDV2View: View {
                             .font(.system(size: 12, weight: .regular, design: .monospaced))
                             .foregroundColor(.white.opacity(0.8))
                     }
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 2)
                 }
-                .padding(.bottom, 6)
+                .padding(.bottom, 12)
             }
-        }
+        } // ← GeometryReader 结束
         .frame(height: 560)
-    }
+    } // ← card 结束（务必保留这两个收尾大括号）
 
-    // MARK: - 自动循环：带放行约束
+
+    // MARK: - 自动循环：带放行约束（含亮度）
     private func startAutoCaptureLoop() {
         guard !isCapturing else { return }
         isCapturing = true
 
         func loop(after delay: TimeInterval) {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                // ★ 亮度/距离/姿态任一不满足 → 继续轮询
                 guard canCaptureNow else { loop(after: 0.25); return }
+
+                // 放行后抓一次
                 pdSvc.captureOnce { ipd in
                     DispatchQueue.main.async {
                         if let ipd = ipd {
@@ -223,6 +288,7 @@ struct PDV2View: View {
     }
 
     private func complete(with ipd: Double) {
+        hapticSuccess.notificationOccurred(.success) 
         spin = false
         didHighlight = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { didHighlight = false }
@@ -303,6 +369,19 @@ struct PDV2View: View {
         }
         let stableFor = headPoseStableAt.map { Date().timeIntervalSince($0) } ?? 0
         self.headPoseOK = (stableFor >= poseStableSeconds)
+
+        // ★ 环境光：< minLux 连续 1s → 只提示一次（不在此处阻塞；阻塞已由 canCaptureNow 实现）
+        if let lux = pdSvc.ambientLux {
+            if lux < minLux {
+                if darkStart == nil { darkStart = Date() }
+                if !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
+                    darkWarned = true
+                    services.speech.restartSpeak("环境光偏暗，可能影响瞳距与测距精度，请打开灯或移至更亮处。", delay: 0)
+                }
+            } else {
+                darkStart = nil // 亮度恢复后重置计时（已提示不重复）
+            }
+        }
     }
 
     // MARK: - 本地格式化
@@ -390,3 +469,26 @@ fileprivate struct DistanceBarH: View {
         }
     }
 }
+
+#if DEBUG
+import SwiftUI
+
+struct PDV2View_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            PDV2View(index: 1, onFinish: { _ in })
+                .environmentObject(AppServices())
+                .environmentObject(AppState())
+                .previewDisplayName("PD · Light")
+                .previewDevice("iPhone 15 Pro")
+
+            PDV2View(index: 1, onFinish: { _ in })
+                .environmentObject(AppServices())
+                .environmentObject(AppState())
+                .preferredColorScheme(.dark)
+                .previewDisplayName("PD · Dark")
+                .previewDevice("iPhone 15 Pro")
+        }
+    }
+}
+#endif

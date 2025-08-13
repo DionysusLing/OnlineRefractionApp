@@ -32,7 +32,7 @@ struct StartupV2View: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
-                    Color.clear.frame(height: headerH * 0.28)
+                    Color.clear.frame(height: headerH * 0.06)
 
                     // Logo + 标题 + 脚注（一次性入场动画）
                     VStack(spacing: 18) {
@@ -41,7 +41,7 @@ struct StartupV2View: View {
                             Image("startupLogo")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 250, height: 250)
+                                .frame(width: 260, height: 260)
                                 .scaleEffect(animateLogo ? 1.0 : 0.92)
                                 .rotationEffect(.degrees(animateLogo ? 0 : -6))
                                 .opacity(animateLogo ? 1 : 0)
@@ -49,24 +49,30 @@ struct StartupV2View: View {
                                     withAnimation(.easeOut(duration: 0.90)) { animateLogo = true }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.90) {
                                         withAnimation(.easeOut(duration: 0.40)) { showTitle = true }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.90 + 0.25) {
-                                            withAnimation(.easeOut(duration: 0.35)) { showFooter = true }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.40 + 0.10) {  //决定了脚注的延时（相对上一行）
+                                            withAnimation(.easeOut(duration: 0.25)) { showFooter = true }
                                         }
                                     }
                                 }
                             Spacer()
                         }
-
-                        Text("线上验光")
-                            .font(.system(size: 48, weight: .regular))
-                            .foregroundColor(ThemeV2.Colors.text)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                            .opacity(showTitle ? 1 : 0)
-                            .offset(y: showTitle ? 0 : 8)
+                        PaintSweepTitle(
+                            text: "线上验光",
+                            fontSize: 46,
+                            weight: .black,
+                            gradient: LinearGradient(colors: [ThemeV2.Colors.brandBlue, ThemeV2.Colors.brandCyan],
+                                                     startPoint: .leading, endPoint: .trailing),
+                            duration: 1.1,
+                            bandFraction: 0.54,
+                            angle: -28,
+                            bandOpacity: 0.55,
+                            edgeFade: 8,
+                            baseOpacity: 1.0
+                        )
+                        .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
 
                         Text("""
-                        本App的发明专利公布号：CN120391991A
+                        发明专利公布号：CN120391991A
                         Power by 眼视觉仿真超级引擎
                         """)
                         .font(.system(size: 14, weight: .regular))
@@ -77,9 +83,9 @@ struct StartupV2View: View {
                         .opacity(showFooter ? 1 : 0)
                         .offset(y: showFooter ? 0 : 6)
                     }
-                    .padding(.top, 4)
+                    .padding(.top, 50)
 
-                    Color.clear.frame(height: 140)
+                    Color.clear.frame(height: 120)
 
                     GlowButton(title: "开始验光") { onStart() }
                         .padding(.horizontal, 24)
@@ -136,7 +142,7 @@ struct StartupV2View: View {
         services.speech.restartSpeak("欢迎使用线上验光。", delay: 0.0)
         guard autoJump else { return }
         // 保守估算中文 TTS 时长 + 1s
-        let estimated: TimeInterval = 2.6
+        let estimated: TimeInterval = 3.6
         let delay: TimeInterval = estimated + 1.0
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             onStart()
@@ -216,6 +222,8 @@ private struct PageDotsV2: View {
     }
 }
 
+
+
 // MARK: - 预览
 #if DEBUG
 struct StartupV2View_Previews: PreviewProvider {
@@ -225,13 +233,6 @@ struct StartupV2View_Previews: PreviewProvider {
                 .environmentObject(AppServices())
                 .environmentObject(AppState())
                 .previewDisplayName("StartupV2 · Light")
-                .previewDevice("iPhone 15 Pro")
-
-            StartupV2View(onStart: {})
-                .environmentObject(AppServices())
-                .environmentObject(AppState())
-                .preferredColorScheme(.dark)
-                .previewDisplayName("StartupV2 · Dark")
                 .previewDevice("iPhone 15 Pro")
         }
     }

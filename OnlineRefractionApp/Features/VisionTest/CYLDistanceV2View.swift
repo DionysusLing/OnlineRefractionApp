@@ -45,13 +45,20 @@ struct CYLDistanceV2View: View {
                 )
                 .transition(.opacity)
             }
-
-            Spacer(minLength: 20)
             VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 8)
         }
+        .overlay(alignment: .topTrailing) {
+                MeasureTopHUD(
+                    title: "",  // 或者：title: nil
+                    measuringEye: (eye == .left ? .left : .right)
+                )
+                .padding(.top, 16)
+                .padding(.trailing, 0)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .pagePadding()
         .pagePadding()
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             svc.start()
 
