@@ -192,6 +192,7 @@ struct FastCYLView: View {
             .padding(.bottom, 28)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
+        .guardedScreen(brightness: 0.70)
         .onAppear {
             services.speech.stop()
             runGuideSpeechAndGate()  // 引导相位：讲解 + 按钮冷冻
@@ -269,7 +270,7 @@ private struct GhostActionButtonFast: View {
             Text(title)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white.opacity(enabled ? 0.95 : 0.6))
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 16)

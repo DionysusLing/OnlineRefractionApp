@@ -151,6 +151,7 @@ struct CYLAxialV2B: View {
                 .padding(.trailing, 0)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .guardedScreen(brightness: 0.70)
             .pagePadding()
             .onAppear {
                 guard !didSpeak else { return }

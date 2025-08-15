@@ -1,129 +1,10 @@
 // Features/V1/Screens.swift  （瘦身版）
 import SwiftUI
 import Photos
+import QuartzCore
+import PDFKit
 
-// MARK: - 3. Checklist（兼容从设置返回 / 旧机型）
-struct ChecklistView: View {
-    @EnvironmentObject var state: AppState
-    @EnvironmentObject var services: AppServices
-    @Environment(\.scenePhase) private var scenePhase
 
-    // 勾选项
-    @State private var items = Array(repeating: false, count: 8)
-    @State private var didAdvance = false
-
-    // 弹窗
-    @State private var showGuide = false
-    @State private var askConfirm = false
-
-    @AppStorage("resumeFromSettings") private var resumeFromSettings = false
-    @AppStorage("needConfirmAutoBrightness") private var needConfirmAutoBrightness = false
-
-    private let icons: [String] = [
-        Asset.icoTripod, Asset.icoBrightOffice, Asset.icoEqualLight, Asset.icoAutoBrightness,
-        Asset.icoAlcohol, Asset.icoSunEye, Asset.icoSports, Asset.icoEye
-    ]
-    private let titles: [String] = [
-        "有可竖直固定手机的支架/装置",
-        "在“明亮办公室”的安静室内环境",
-        "前后方亮度均匀无大反差光线",
-        "关闭手机屏幕自动亮度",
-        "没处于酒后、疲劳、虚弱等",
-        "过去2小时没在强光下长时间用眼",
-        "过去2小时没进行剧烈运动",
-        "眼部没有生理性异常或病变"
-    ]
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Color.clear.frame(height: 40)
-            ForEach(0..<titles.count, id: \.self) { i in
-                ChecklistRow(icon: icons[i], title: titles[i], checked: items[i])
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if i == 4 - 1 { // 第 4 项（自动亮度）
-                            showGuide = true
-                        } else {
-                            items[i].toggle()
-                        }
-                    }
-            }
-            Spacer()
-            VoiceBar().scaleEffect(0.5)
-        }
-        .pagePadding()
-        .onAppear {
-            if resumeFromSettings, needConfirmAutoBrightness {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { askConfirm = true }
-            }
-            services.speech.restartSpeak(
-                "请逐条确认以下条件。第四项需要在设置里关闭自动亮度。全部打勾后将自动进入下一步。",
-                delay: 0.60
-            )
-        }
-        .onChange(of: scenePhase) { phase, _ in
-            if phase == .active, resumeFromSettings, needConfirmAutoBrightness {
-                askConfirm = true
-            }
-        }
-        .onChange(of: items) { _, newValue in
-            guard !didAdvance, newValue.allSatisfy({ $0 }) else { return }
-            didAdvance = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                state.path.append(.pd1) // 路由仍然进入 PDv2（在 AppRouter 内）
-            }
-        }
-
-        // 说明弹窗 -> 去设置
-        .alert("如何关闭“自动亮度”", isPresented: $showGuide) {
-            Button("前往设置") {
-                resumeFromSettings = true
-                needConfirmAutoBrightness = true
-                openAppSettings()
-            }
-            Button("我再看看", role: .cancel) {}
-        } message: {
-            Text("路径：设置 → 辅助功能 → 显示与文字大小 → 关闭“自动亮度”")
-        }
-
-        // 返回后的确认
-        .confirmationDialog("已关闭“自动亮度”吗？", isPresented: $askConfirm, titleVisibility: .visible) {
-            Button("已关闭") {
-                items[3] = true
-                needConfirmAutoBrightness = false
-                resumeFromSettings = false
-            }
-            Button("还没有", role: .cancel) {}
-        }
-    }
-
-    private func openAppSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString),
-              UIApplication.shared.canOpenURL(url) else { return }
-        UIApplication.shared.open(url)
-    }
-}
-
-/// 单行行视图
-private struct ChecklistRow: View {
-    let icon: String
-    let title: String
-    let checked: Bool
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SafeImage(icon, size: .init(width: 32, height: 32))
-            Text(title).layoutPriority(1).fixedSize(horizontal: true, vertical: false)
-            Spacer()
-            SafeImage(checked ? Asset.chUnchecked : Asset.chChecked,
-                      size: .init(width: 20, height: 20))
-        }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 14)
-        .background(Color(white: 0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
 
 // MARK: - CYL 统一入口（AppRouter 写法保持不变）
 struct CYLAxialView: View {
@@ -201,6 +82,7 @@ struct CYLAxialAView: View {
             .frame(width: g.size.width, height: g.size.height)
             .ignoresSafeArea(edges: .bottom)
         }
+        .guardedScreen(brightness: 0.70)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { guard !didSpeak else { return }; didSpeak = true; runGuideSpeechAndGate() }
         .onChangeCompat(phase) { _, newPhase in if newPhase == .guide { runGuideSpeechAndGate() } }
@@ -309,6 +191,7 @@ struct CYLAxialMoreView: View {
             VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 8)
         }
+        .guardedScreen(brightness: 0.70)
         .navigationBarTitleDisplayMode(.inline)
         .pagePadding()
         .onAppear {
@@ -364,6 +247,7 @@ struct CYLDistanceView: View {
             VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 8)
         }
+        .guardedScreen(brightness: 0.70)
         .pagePadding()
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -411,6 +295,7 @@ struct VAView: View {
 struct VAEndView: View { var body: some View { VALearnView() } }
 
 // 12 · Result（验光单页 + 保存到相册 · UI2按钮，竖排）
+
 private struct ResultKVRow: View {
     let title: String; let value: String
     var body: some View {
@@ -425,7 +310,7 @@ private struct ResultEyeBlock: View {
     let title: String
     let rows: [(String, String)]
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {  //行距
             Text(title).font(.headline)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
                 ResultKVRow(title: item.0, value: item.1)
@@ -455,10 +340,10 @@ private struct ResultCard: View {
             Text("验光单").font(.system(size: 28, weight: .semibold))
             HStack { Text("瞳距").font(.headline); Spacer(); Text(pdText ?? "—").monospacedDigit() }
             Divider().padding(.vertical, 1)
-            ResultEyeBlock(title: "右眼", rows: [("蓝屏", f(rightBlue)), ("白屏", f(rightWhite)), ("轴向", axis(rightAxisDeg)), ("焦线位置", focus(rightFocusMM)), ("CF", rCF)])
+            ResultEyeBlock(title: "右眼 R", rows: [("Δ LCA", f(rightBlue)), ("视力", f(rightWhite)), ("轴向", axis(rightAxisDeg)), ("FL", focus(rightFocusMM)), ("CF", rCF)])
             Divider().padding(.vertical, 1)
-            ResultEyeBlock(title: "左眼", rows: [("蓝屏", f(leftBlue)), ("白屏", f(leftWhite)), ("轴向", axis(leftAxisDeg)), ("焦线位置", focus(leftFocusMM)), ("CF", lCF)])
-            Text("（单位：logMAR／mm 或项目内实际单位）").font(.footnote).foregroundColor(.secondary)
+            ResultEyeBlock(title: "左眼 L", rows: [("Δ LCA", f(leftBlue)), ("视力", f(leftWhite)), ("轴向", axis(leftAxisDeg)), ("FL", focus(leftFocusMM)), ("CF", lCF)])
+            Text("（单位：五分法 S／mm）").font(.footnote).foregroundColor(.secondary)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -478,13 +363,17 @@ struct ResultV2View: View {
     let rightWhite: Double?
     let leftBlue: Double?
     let leftWhite: Double?
+    
+    @State private var showEngineDoc = false
+    @State private var playConfetti = false
+    @State private var previewFireConfetti = false
 
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMsg = ""
-    private let headerH: CGFloat = 260
+    private let headerH: CGFloat = 240
 
     private var cardView: some View {
         ResultCard(
@@ -499,11 +388,16 @@ struct ResultV2View: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            V2BlueHeader(title: "验光完成",
-                         subtitle: "系统已将配镜度数发给您的配镜服务商",
-                         progress: nil, height: headerH)
-                .ignoresSafeArea(edges: .top)
+            // 顶部头图
+            V2BlueHeader(
+                title: "验光完成",
+                subtitle: "系统已将配镜度数发给您的配镜服务商",
+                progress: nil,
+                height: headerH
+            )
+            .ignoresSafeArea(edges: .top)
 
+            // 主体内容
             VStack(spacing: 16) {
                 ScrollView(showsIndicators: false) {
                     cardView
@@ -511,19 +405,54 @@ struct ResultV2View: View {
                         .padding(.top, 16)
                         .padding(.bottom, 8)
                 }
+                
+                Button {
+                    showEngineDoc = true
+                } label: {
+                    HStack(spacing: 0) {
+                        Text("Power by ")
+                            .foregroundColor(ThemeV2.Colors.subtext)
+                        Text("眼视光仿真超级引擎")
+                            .foregroundColor(ThemeV2.Colors.brandBlue)
+                    }
+                    .font(ThemeV2.Fonts.note())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                
                 GlowButton(title: isSaving ? "正在保存…" : "保存到相册", disabled: isSaving) {
                     Task { await saveToAlbum() }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 20)
+                .padding(.bottom, 10)
             }
-            .padding(.top, headerH * 0.40)
+            .padding(.top, headerH * 0.38)
+
+            // 彩纸覆盖层（放在最上层）
+            if playConfetti {
+                ConfettiRainView(duration: 3.0, count: 140)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .zIndex(10)
+            }
         }
+
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .alert("提示", isPresented: $showAlert) { Button("好", role: .cancel) {} } message: { Text(alertMsg) }
+        .sheet(isPresented: $showEngineDoc) {
+            PDFViewerBundled(fileName: "EngineWhitepaper",   // 你的 PDF 名（不带 .pdf）
+                             title: "眼视光仿真超级引擎")
+        }
         .onAppear {
             services.speech.stop() // ← 进入主结果页时强制静音
+            // 播放一次彩纸动画
+            playConfetti = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
+                withAnimation(.easeOut(duration: 0.35)) { playConfetti = false }
+            }
         }
         .onDisappear {
             services.speech.stop()
@@ -556,3 +485,155 @@ struct ResultV2View: View {
         #endif
     }
 }
+
+
+// =============== Confetti ===============
+fileprivate enum ConfettiShape: CaseIterable { case rect, circle, capsule, triangle, star }
+
+fileprivate struct ConfettiPiece: Identifiable {
+    let id = UUID()
+    let x0: CGFloat            // 初始 x（屏宽内随机）
+    let y0: CGFloat            // 初始 y（负数：屏幕上缘外一点随机）
+    let vx: CGFloat            // 横向漂移速度
+    let vy: CGFloat            // 下落速度（pt/s）
+    let spin: CGFloat          // 自转速度（rad/s）
+    let angle0: CGFloat        // 初始角
+    let wobbleAmp: CGFloat     // 左右摆动幅度
+    let wobbleFreq: CGFloat    // 左右摆动频率（rad/s）
+    let size: CGSize           // 粒子尺寸
+    let color: Color           // 颜色
+    let shape: ConfettiShape   // 形状
+    let life: TimeInterval     // 寿命
+}
+
+fileprivate struct ConfettiRainView: View {
+    var duration: TimeInterval = 3.0        // 播放总时长
+    var count: Int = 140                    // 粒子数量
+    var fallSpeed: ClosedRange<CGFloat> = 220...360
+    var spinSpeed: ClosedRange<CGFloat> = (-3.5)...(3.5)
+    var wobbleAmpRange: ClosedRange<CGFloat> = 4...18
+    var wobbleFreqRange: ClosedRange<CGFloat> = 2...6
+    var sizeRange: ClosedRange<CGFloat> = 6...14
+    var palette: [Color] = [.red, .orange, .yellow, .green, .mint, .teal, .blue, .purple, .pink]
+
+    @State private var start = Date()
+    @State private var pieces: [ConfettiPiece] = []
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { ctx, size in
+                let t = timeline.date.timeIntervalSince(start)
+                guard t <= duration else { return } // 超时后不再绘制
+
+                // 懒生成
+                if pieces.isEmpty {
+                    pieces = (0..<count).map { _ in
+                        let w = size.width
+                        let hStart = CGFloat.random(in: -120...(-20)) // 从屏上方出场
+                        let s = CGFloat.random(in: sizeRange)
+                        return ConfettiPiece(
+                            x0: CGFloat.random(in: 0...w),
+                            y0: hStart,
+                            vx: CGFloat.random(in: -30...30),
+                            vy: CGFloat.random(in: fallSpeed),
+                            spin: CGFloat.random(in: spinSpeed),
+                            angle0: CGFloat.random(in: -CGFloat.pi...CGFloat.pi),
+                            wobbleAmp: CGFloat.random(in: wobbleAmpRange),
+                            wobbleFreq: CGFloat.random(in: wobbleFreqRange),
+                            size: .init(width: s * CGFloat.random(in: 0.9...1.4), height: s),
+                            color: palette.randomElement() ?? .pink,
+                            shape: ConfettiShape.allCases.randomElement() ?? .rect,
+                            life: TimeInterval.random(in: (duration * 0.85)...(duration * 1.10))
+                        )
+                    }
+                }
+
+                for p in pieces {
+                    guard t <= p.life else { continue }
+                    // 物理：位置 & 姿态
+                    let y = p.y0 + p.vy * CGFloat(t)
+                    let x = p.x0 + p.vx * CGFloat(t) + sin(CGFloat(t) * p.wobbleFreq + p.angle0) * p.wobbleAmp
+                    let angle = p.angle0 + p.spin * CGFloat(t)
+
+                    var transform = CGAffineTransform.identity
+                    transform = transform.translatedBy(x: x, y: y)
+                    transform = transform.rotated(by: angle)
+
+                    // 形状绘制
+                    let rect = CGRect(x: -p.size.width * 0.5, y: -p.size.height * 0.5,
+                                      width: p.size.width, height: p.size.height)
+                    let path: Path = {
+                        switch p.shape {
+                        case .rect:
+                            return Path(roundedRect: rect, cornerRadius: min(p.size.width, p.size.height) * 0.15)
+                        case .capsule:
+                            return Path(roundedRect: rect, cornerRadius: p.size.height * 0.5)
+                        case .circle:
+                            return Path(ellipseIn: rect)
+                        case .triangle:
+                            var path = Path()
+                            path.move(to: CGPoint(x: 0, y: -rect.height * 0.6))
+                            path.addLine(to: CGPoint(x: rect.width * 0.6, y: rect.height * 0.6))
+                            path.addLine(to: CGPoint(x: -rect.width * 0.6, y: rect.height * 0.6))
+                            path.closeSubpath()
+                            return path
+                        case .star:
+                            var path = Path()
+                            let r1 = max(p.size.width, p.size.height) * 0.55
+                            let r2 = r1 * 0.48
+                            for i in 0..<10 {
+                                let a = CGFloat(i) * .pi / 5
+                                let r = (i % 2 == 0) ? r1 : r2
+                                let pt = CGPoint(x: cos(a) * r, y: sin(a) * r)
+                                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+                            }
+                            path.closeSubpath()
+                            return path
+                        }
+                    }()
+
+                    // 上色 + 轻微阴影
+                    var ctxCopy = ctx
+                    ctxCopy.opacity = 0.95
+                    ctxCopy.addFilter(.shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1))
+                    ctxCopy.fill(path.applying(transform), with: .color(p.color))
+                }
+            }
+        }
+        .ignoresSafeArea()               // 覆盖全屏
+        .allowsHitTesting(false)         // 不影响交互
+        .onAppear { start = Date() }     // 每次出现重新计时
+        .transition(.opacity)
+    }
+}
+// ============= End Confetti =============
+
+
+#if DEBUG
+struct ResultV2View_Previews: PreviewProvider {
+    static var previews: some View {
+        let s = AppState()
+        // 准备一些示例数据
+        s.pd1_mm = 62.5
+        s.pd2_mm = 62.5
+        s.pd3_mm = 62.5
+        s.cylR_axisDeg = 45
+        s.cylL_axisDeg = 140
+        s.cylR_clarityDist_mm = 520
+        s.cylL_clarityDist_mm = 430
+        s.cfRightD = 0.55
+        s.cfLeftD  = 0.70
+
+        return ResultV2View(
+            pdText: "62.5 mm",
+            rightAxisDeg: s.cylR_axisDeg, leftAxisDeg: s.cylL_axisDeg,
+            rightFocusMM: s.cylR_clarityDist_mm, leftFocusMM: s.cylL_clarityDist_mm,
+            rightBlue: 1.2, rightWhite: 1.0,
+            leftBlue: 1.1, leftWhite: 0.9
+        )
+        .environmentObject(AppServices())
+        .environmentObject(s)
+        .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif

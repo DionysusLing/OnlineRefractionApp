@@ -28,8 +28,8 @@ final class AppState: ObservableObject {
     @Published var cylL_axisDeg: Int? = nil
     @Published var cylR_clarityDist_mm: Double? = nil
     @Published var cylL_clarityDist_mm: Double? = nil
-    @Published var cylR_suspect: Bool? = nil
-    @Published var cylL_suspect: Bool? = nil
+    @Published var cylR_suspect: Bool = false
+    @Published var cylL_suspect: Bool = false
 
     @Published var lastOutcome: VAFlowOutcome? = nil
 
@@ -39,8 +39,8 @@ final class AppState: ObservableObject {
 
     func startFastMode() {
         fast = .init()
-        fastPendingReturnToResult = false
-        fastPendingReturnToLeftCYL = false
+        cylR_suspect = false
+        cylL_suspect = false
     }
 }
 

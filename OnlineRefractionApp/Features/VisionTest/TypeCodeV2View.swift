@@ -27,12 +27,21 @@ struct TypeCodeV2View: View {
     @State private var showService = false
     @State private var showPrivacy = false
 
-    // 新增：进入页面 2 秒后才允许点击
+    // 进入页面 2 秒后才允许点击
     @State private var canTapPrimary = false
 
+    // 键盘焦点
+    @FocusState private var codeFieldFocused: Bool
+
     private let headerH: CGFloat = 120
+    private static var hasSpokenIntro = false
+
+    // 仅当“正确输入为 0”时才切到“医师验光”，否则一律显示“快速验光”
+    private var isDoctorCodeValid: Bool {
+        code.trimmingCharacters(in: .whitespacesAndNewlines) == "0"
+    }
     private var primaryTitle: String {
-        code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "快速验光" : "医师验光"
+        isDoctorCodeValid ? "医师模式" : "快速验光"
     }
 
     var body: some View {
@@ -61,14 +70,24 @@ struct TypeCodeV2View: View {
                     ChipToggle(label: "我是近视，不是远视", isOn: $myopiaOnly)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("邀请码｜医师验光（专家模式）")
+                        Text("邀请码｜医师模式")
                             .font(ThemeV2.Fonts.note())
                             .foregroundColor(ThemeV2.Colors.subtext)
 
-                        TextField("在这里输入或粘贴邀请码/可输0000", text: $code)
+                        TextField("在这里输入或粘贴邀请码/输0体验", text: $code)
                             .keyboardType(.numberPad)
+                            .focused($codeFieldFocused)
                             .textFieldStyle(FixedHeightFieldStyle(height: 48))
                             .onSubmit { proceed() } // 回车同样受 canTapPrimary 限制
+                            .onChange(of: code) { newValue in
+                                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                // 仅当输入“0”视为有效并自动收起键盘；其他任何内容不提示也不处理
+                                if trimmed == "0" {
+                                    // 规范化内容为单个“0”（防止用户输入“ 0 ”之类）
+                                    if code != "0" { code = "0" }
+                                    codeFieldFocused = false // ✅ 收起键盘
+                                }
+                            }
                     }
                     .padding(16)
                     .background(ThemeV2.Colors.card)
@@ -100,10 +119,12 @@ struct TypeCodeV2View: View {
             }
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
-        .screenSpeech("确认年龄与验光类型即可快速验光。填写邀请码后可进入医师模式。", delay: 0.15)
         .onAppear {
+            if !Self.hasSpokenIntro {
+                services.speech.restartSpeak("请确认年龄和验光类型。有邀请码可以进入医师模式。", delay: 0.15)
+                Self.hasSpokenIntro = true
+            }
             canTapPrimary = false
-            // 2 秒后放开
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { canTapPrimary = true }
         }
         .sheet(isPresented: $showService) {
@@ -132,7 +153,7 @@ struct TypeCodeV2View: View {
                 .navigationBarTitleDisplayMode(.large)
             }
         }
-    } // ←←← 关键：这里结束 body
+    } // ← body 结束
 
     // MARK: - 法务文案（类型作用域，非 body 内）
     private enum LegalText {
@@ -199,23 +220,25 @@ struct TypeCodeV2View: View {
 本政策可能适时修订。更新后我们将在应用中公布最新版本；您继续使用本应用即表示同意该等更新。若您不同意更新内容，可停止使用本应用并联系我们处理相关事宜。
 """
     }
-
-    // MARK: - 分流逻辑
+    // MARK: - 分流逻辑（仅“0”进入医师模式）
     private func proceed() {
         guard canTapPrimary else { return } // 未到 2 秒直接 return
         guard agreed && ageOK && myopiaOnly else {
             services.speech.restartSpeak("请先确认基础条件并同意协议。", delay: 0)
             return
         }
-        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        if isDoctorCodeValid {
+            // 医师模式；键盘已在 onChange 收起，这里再确保一下
+            codeFieldFocused = false
+            onNext()
+        } else {
+            // 非“0”与空白都走快速模式；无任何额外提醒
             state.startFastMode()
             state.path.append(.cf(.fast))   // 先做 CF（快速流程）
-        } else {
-            onNext()                        // 医师模式
         }
     }
 }
+
 
 // MARK: - 预览
 #if DEBUG

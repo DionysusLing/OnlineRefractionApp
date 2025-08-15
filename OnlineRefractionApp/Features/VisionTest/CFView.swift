@@ -11,8 +11,6 @@ struct CFView: View {
     @State private var phase: EyePhase = .right
     @State private var selR: Int? = nil
     @State private var selL: Int? = nil
-    
-    @State private var didArmScreen = false
 
     private let cfMap: [Int: Double] = [1: 0.90, 2: 0.55, 3: 0.00]
 
@@ -39,31 +37,16 @@ struct CFView: View {
             }
             .ignoresSafeArea(edges: .bottom)
         }
-        .onAppear {
-                    if !didArmScreen {
-                        IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.80)
-                        didArmScreen = true
-                    }
-            services.speech.restartSpeak(
-                "请闭上左眼，用右眼观察屏幕并点击数字报告你在屏幕上看到多少档灰度。",
-                delay: 0.2
+        .guardedScreen(brightness: 0.70)
+        .overlay(alignment: .topLeading) {
+            MeasureTopHUD(
+                title: "白内障检测",
+                measuringEye: (phase == .right ? .right : (phase == .left ? .left : nil))
             )
         }
-        .onDisappear {
-                    if didArmScreen {
-                        BrightnessGuard.shared.pop()
-                        IdleTimerGuard.shared.end()
-                        didArmScreen = false
-                    }
-                }
-        .overlay(alignment: .topLeading) {
-            // phase: .right / .left / .done
-            let hudEye: MeasureTopHUD.EyeSide? =
-                (phase == .right ? .right : (phase == .left ? .left : nil))
-            MeasureTopHUD(title: "白内障检测", measuringEye: hudEye)
-        }
         .navigationBarTitleDisplayMode(.inline)
+        .guardedScreen(brightness: 0.70) // 或用你的 kExamBrightness
+        .screenSpeech("请闭左眼，单右眼观察屏幕并点击数字报告你在屏幕上看到几档明暗度。", delay: 0.2)
     }
 
     // MARK: - Button（全彩渐变款）
@@ -110,13 +93,11 @@ struct CFView: View {
         case .right:
             selR = n
             state.cfRightD = val
-            services.speech.restartSpeak("已记录。", delay: 0)
-            services.speech.speak("请闭上右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到多少档灰度。", after: 0.60)
+            services.speech.speak("请闭右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到几党明暗度。", after: 0.60)
             phase = .left
         case .left:
             selL = n
             state.cfLeftD = val
-            services.speech.restartSpeak("已记录。", delay: 0)
             phase = .done
 
             // ⬅️ CF 自己决定去向：支流程→快速视力；主流程→散光 5A

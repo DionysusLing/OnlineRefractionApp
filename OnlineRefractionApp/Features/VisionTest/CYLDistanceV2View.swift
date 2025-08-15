@@ -59,12 +59,11 @@ struct CYLDistanceV2View: View {
             .navigationBarTitleDisplayMode(.inline)
             .pagePadding()
         .pagePadding()
+        .guardedScreen(brightness: 0.70)
         .onAppear {
             svc.start()
-
             guard !didSpeak else { return }
             didSpeak = true
-
             // 播报引导；播报后才允许点击
             services.speech.stop()
             services.speech.restartSpeak(
@@ -89,7 +88,7 @@ struct CYLDistanceV2View: View {
         hasLocked = true                               // 显示绿色胶囊，按钮消失
 
         services.speech.stop()
-        services.speech.speak(String(format: "距离已记录。", mmVal))
+        services.speech.speak(String(format: "已记录。", mmVal))
 
         // 写入状态机
         if eye == .right {

@@ -4,9 +4,6 @@ import ARKit
 import simd
 import UIKit
 
-
-/// v2 · PD 测量（1/3、2/3、3/3）
-/// 进入即开始：循环调用 `captureOnce`，拿到 IPD 即播报并跳转。
 struct PDV2View: View {
     @EnvironmentObject var services: AppServices
     let index: Int
@@ -102,6 +99,7 @@ struct PDV2View: View {
             delay: 0.12
         )
         // 启动
+        .guardedScreen(brightness: 0.70)
         .onAppear {
             if !isCapturing {
                 pdSvc.start()
@@ -130,6 +128,7 @@ struct PDV2View: View {
                 .allowsHitTesting(false)
                 .id("PDV2-\(index)")
         }
+        .guardedScreen(brightness: 0.70)
     }
 
     // MARK: - Header

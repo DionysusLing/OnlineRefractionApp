@@ -1,7 +1,6 @@
 import SwiftUI
 
 
-
 // MARK: - 5A · 散光盘：引导 + 判定（不测距）
 struct CYLAxial2AView: View {
     enum Phase { case guide, decide }
@@ -74,7 +73,7 @@ struct CYLAxial2AView: View {
                 .animation(.easeInOut(duration: 0.25), value: showChoices)
                 .overlay(alignment: .topLeading) {
                     MeasureTopHUD(
-                        title: "散光眼视觉范例",
+                        title: "散光范例",
                         measuringEye: (eye == .left ? .left : .right)
                     )
                 }
@@ -109,6 +108,7 @@ struct CYLAxial2AView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
+        .guardedScreen(brightness: 0.80) 
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             guard !didSpeak else { return }
@@ -208,24 +208,6 @@ struct CYLAxial2AView: View {
     }
 }
 
-// 极简主按钮（半透明、低调）
-private struct GhostPrimaryButton: View {
-    let title: String; var action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(Color.white)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.75))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
 
 
 

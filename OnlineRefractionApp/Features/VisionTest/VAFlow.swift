@@ -1,4 +1,4 @@
-//  OnlineRefractionApp
+//  VAFlow.swift — cleaned & compiling version (S-scale, promotion-distance check)
 
 import SwiftUI
 import ARKit
@@ -6,7 +6,7 @@ import Combine
 import simd
 import CoreMotion
 
-// MARK: - Outcome
+// MARK: - Outcome passed to Result page
 public struct VAFlowOutcome {
     public let rightBlue:  Double?
     public let rightWhite: Double?
@@ -33,104 +33,57 @@ public struct VAFlowView: View {
         }())
     }
 
-    public var body: some View {
-        ZStack {
-            switch vm.phase {
-            case .learn:
-                VALearnPage(vm: vm)
-                    .onAppear { vm.onAppearLearn(services) }
+        public var body: some View {
+            ZStack {
+                switch vm.phase {
+                case .learn:
+                    VALearnPage(vm: vm)
+                        .guardedScreen(brightness: 0.70)
+                        .onAppear { vm.onAppearLearn(services) }
 
-            case .distance:
-                DistanceBarsHUD(
-                    distanceMM: vm.distanceMM,
-                    tiltDeg: vm.tiltDeg,
-                    tiltOK: vm.tiltOK,
-                    tiltLimitDeg: vm.tiltLimitDeg,
-                    eyeDeltaM: vm.eyeDeltaM,
-                    eyeHeightOK: vm.eyeHeightOK,
-                    headPoseOK: vm.headPoseOK,
-                    yaw:   Double(vm.yawFaceDeg),
-                    pitch: Double(vm.pitchFaceDeg),
-                    roll:  Double(vm.rollFaceDeg)
-                )
-                .onAppear {
-                                    // ✅ 进入界面8：防熄屏 + 提亮
-                                    IdleTimerGuard.shared.begin()
-                    BrightnessGuard.shared.push(to: 0.70)   // 需要的话改成 0.85
-                                    vm.onAppearDistance(services)
-                                }
-                                .onDisappear {
-                                    // ✅ 离开界面8：恢复
-                                    BrightnessGuard.shared.pop()
-                                    IdleTimerGuard.shared.end()
-                                }
-                .onAppear { vm.onAppearDistance(services) }
+                case .distance:
+                    DistanceBarsHUD(
+                        distanceMM: vm.distanceMM,
+                        tiltDeg: vm.tiltDeg, tiltOK: vm.tiltOK, tiltLimitDeg: vm.tiltLimitDeg,
+                        eyeDeltaM: vm.eyeDeltaM, eyeHeightOK: vm.eyeHeightOK,
+                        headPoseOK: vm.headPoseOK,
+                        yaw: Double(vm.yawFaceDeg), pitch: Double(vm.pitchFaceDeg), roll: Double(vm.rollFaceDeg)
+                    )
+                    .guardedScreen(brightness: 0.70)
+                    .onAppear { vm.onAppearDistance(services) }
 
-            case .blueRight:
-                VATestPage(vm: vm, theme: .blue, eye: .right)
-                    .onAppear {
-                                            // ✅ 进入界面9/10：同样防熄屏 + 提亮
-                                            IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.70)
-                                            vm.onAppearTest(services, theme: .blue, eye: .right)
-                                        }
-                                        .onDisappear {
-                                            BrightnessGuard.shared.pop()
-                                            IdleTimerGuard.shared.end()
-                                        }
-                    .onAppear { vm.onAppearTest(services, theme: .blue, eye: .right) }
+                case .blueRight:
+                    VATestPage(vm: vm, theme: .blue, eye: .right)
+                        .guardedScreen(brightness: 0.80)
+                        .onAppear { vm.onAppearTest(services, theme: .blue, eye: .right) }
 
-            case .blueLeft:
-                VATestPage(vm: vm, theme: .blue, eye: .left)
-                    .onAppear {
-                        IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.70)
-                        vm.onAppearTest(services, theme: .blue, eye: .left)
-                    }
-                    .onDisappear {
-                        BrightnessGuard.shared.pop()
-                        IdleTimerGuard.shared.end()
-                    }
-                    .onAppear { vm.onAppearTest(services, theme: .blue, eye: .left) }
+                case .blueLeft:
+                    VATestPage(vm: vm, theme: .blue, eye: .left)
+                        .guardedScreen(brightness: 0.80)
+                        .onAppear { vm.onAppearTest(services, theme: .blue, eye: .left) }
 
-            case .whiteRight:
-                VATestPage(vm: vm, theme: .white, eye: .right)
-                    .onAppear {
-                                            IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 0.70)
-                                            vm.onAppearTest(services, theme: .white, eye: .right)
-                                        }
-                                        .onDisappear {
-                                            BrightnessGuard.shared.pop()
-                                            IdleTimerGuard.shared.end()
-                                        }
-                    .onAppear { vm.onAppearTest(services, theme: .white, eye: .right) }
+                case .whiteRight:
+                    VATestPage(vm: vm, theme: .white, eye: .right)
+                        .guardedScreen(brightness: 0.70)
+                        .onAppear { vm.onAppearTest(services, theme: .white, eye: .right) }
 
-            case .whiteLeft:
-                VATestPage(vm: vm, theme: .white, eye: .left)
-                    .onAppear {
-                        IdleTimerGuard.shared.begin()
-                        BrightnessGuard.shared.push(to: 1.0)
-                        vm.onAppearTest(services, theme: .white, eye: .left)
-                    }
-                    .onDisappear {
-                        BrightnessGuard.shared.pop()
-                        IdleTimerGuard.shared.end()
-                    }
-                    .onAppear { vm.onAppearTest(services, theme: .white, eye: .left) }
+                case .whiteLeft:
+                    VATestPage(vm: vm, theme: .white, eye: .left)
+                        .guardedScreen(brightness: 0.70)
+                        .onAppear { vm.onAppearTest(services, theme: .white, eye: .left) }
 
-            case .end:
-                VAEndPage(
-                    vm: vm,
-                    onAgain: { vm.restartToDistance() },
-                    onSubmitTap: { onFinish?(vm.outcome) }
-                )
+                case .end:
+                    VAEndPage(
+                        vm: vm,
+                        onAgain: { vm.restartToDistance() },
+                        onSubmitTap: { onFinish?(vm.outcome) }
+                    )
+                    .guardedScreen(brightness: 0.70)
+                }
             }
+            .ignoresSafeArea()
         }
-        .ignoresSafeArea()
     }
-}
-
 
 
 // MARK: - ViewModel
@@ -138,13 +91,10 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
 
     enum Phase { case learn, distance, blueRight, blueLeft, whiteRight, whiteLeft, end }
     enum Theme { case blue, white }
-    // OnlineRefractionApp/Models/Eye.swift  （或 RoutesAModels.swift）
-    public enum Eye: String, CaseIterable, Codable, Hashable {
-        case right, left
-    }
+    public enum Eye: String, CaseIterable, Codable, Hashable { case right, left }
     enum Dir: CaseIterable { case up, down, left, right }
 
-    // UI
+    // UI state
     @Published var phase: Phase = .learn
 
     @Published var distanceMM: CGFloat = 0
@@ -155,12 +105,12 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     @Published var curLevelIdx = 0
     @Published var isInLearnIntro = false
 
-    // 调试 overlay（统一坐标后的 pitch / Δz）
+    // debug overlay
     @Published var pitchDeg: Float = 0
     @Published var deltaZ:   Float = 0
     @Published var practiceText = ""
 
-    // 三轴（相机坐标）——用于 HUD 提示，不参与放行
+    // head pose (for HUD only)
     @Published var yawFaceDeg:   Float = 0
     @Published var pitchFaceDeg: Float = 0
     @Published var rollFaceDeg:  Float = 0
@@ -169,23 +119,21 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     let headPitchAbs: Float = 24
     let headRollAbs:  Float = 20
 
-    // 眼高门控
+    // eye height gate
     @Published var eyeHeightOK = true
     @Published var eyeDeltaM: Float = 0
-    private let eyeHeightTolM: Float = 0.05
+    private let eyeHeightTolM: Float = 0.10
     private var lastEyeHintAt: Date = .distantPast
     private let eyeHintCooldown: TimeInterval = 3.0
 
-    // Services / AR
+    // services / AR
     private weak var services: AppServices?
     private let session = ARSession()
-    var onFinish: ((VAFlowOutcome) -> Void)?
 
-    // 竖直度（界面8）
+    // tilt gate
     @Published var tiltDeg: Double = 0
     @Published var tiltOK:  Bool   = true
-    let tiltLimitDeg: Double = 5.0
-
+    let tiltLimitDeg: Double = 10.0
     private let motion = CMMotionManager()
     private let motionQueue: OperationQueue = {
         let q = OperationQueue()
@@ -193,26 +141,25 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         q.qualityOfService = .userInteractive
         return q
     }()
-
     private var lastTiltSpokenAt: Date = .distantPast
     private let tiltHintCooldown: TimeInterval = 3.0
 
-    // Timing
+    // timing
     private let adaptSecs = 20
     private let listenSecs: TimeInterval = 3.0
     private let speechOK  : TimeInterval = 1.0
     private let speechNone: TimeInterval = 3.0
     private var adaptTimer: Timer?
 
-    // 头部动作阈值
+    // head-motion thresholds
     private let upPitchPractice:   Float = 20
     private let downPitchPractice: Float = -20
-    private let upPitchTest:       Float = 20
-    private let downPitchTest:     Float = -20
+    private let upPitchTest:       Float = 25
+    private let downPitchTest:     Float = -6
     private let dzRightThresh:     Float = 0.025
     private let dzLeftThresh:      Float = -0.025
 
-    // 距离门控（界面8）
+    // distance gate (screen 8)
     private let minMM: CGFloat = 1192
     private let maxMM: CGFloat = 1205
 
@@ -222,43 +169,103 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     private var lastSpokenAt: Date = .distantPast
     private var lastSpokenZone: DistanceZone? = nil
 
-    // 流程控制
+    // flow control
     private var nextAfterDistance: Phase = .blueRight
     private let targetMM: CGFloat = 1200
-    private let failureInvalidateTol: CGFloat = 50
+    private let promotionTolMM: CGFloat = 100   // 允差（±mm）
 
-    // 监听窗口
+    // listening window
     private var listenWork: DispatchWorkItem?
     private var listenStartAt: Date?
     private var listenRemaining: TimeInterval = 0
 
-    // 视标等级
-    private struct Level { let logMAR: Double; let sizePt: CGFloat }
+    // MARK: - Levels (store S, not logMAR)
+    private struct Level { let S: Double; let sizePt: CGFloat }
     private var levels: [Level] = []
     var sizePtCurrent: CGFloat { levels[safe: curLevelIdx]?.sizePt ?? 120 }
+    var currentS: Double? { levels[safe: curLevelIdx]?.S }
 
-    // 练习 bookkeeping
+    // direction deck: no consecutive repeats (even across levels)
+    private var dirDeck: [Dir] = []
+    private var lastDirShown: Dir? = nil
+    private func drawNextDir() -> Dir {
+        if dirDeck.isEmpty {
+            var bag = Dir.allCases.shuffled()
+            if let last = lastDirShown, bag.first == last, bag.count >= 2 {
+                bag.swapAt(0, 1)
+            }
+            dirDeck = bag
+        }
+        let d = dirDeck.removeFirst()
+        lastDirShown = d
+        return d
+    }
+
+    // practice bookkeeping
     private var practiceQueue: [Dir] = []
     private var practiceIndex = 0
     private var practiceListening = false
     private var practiceTimeout: DispatchWorkItem?
     private var practiceWork: DispatchWorkItem?
 
-    // 正式测试 bookkeeping
+    // formal test bookkeeping
     private var awaitingAnswer = false
     private var hitUp = false, hitDown = false, hitLeft = false, hitRight = false
     private var bestPassedIdx: Int?
-    private var wrongCntThisLv = 0
+    private var trialsThisLevel = 0
+    private var correctThisLevel = 0
 
-    // 结果
-    private var outcomeSnapshot: VAFlowOutcome?
+    // 是否命中当前目标方向
+    private func isTargetHit(_ target: Dir) -> Bool {
+        switch target {
+        case .up:    return hitUp
+        case .down:  return hitDown
+        case .left:  return hitLeft
+        case .right: return hitRight
+        }
+    }
+
+    // 是否允许晋级：只在“准备升到下一行”时检查
+    private func distanceOKForPromotion() -> Bool {
+        abs(distanceMM - targetMM) <= promotionTolMM
+    }
+
+    /// 尝试晋级；若距离不达标，则留在本级继续做题（不回测距、不作废）
+    private func advanceToNextLevelOrStay() {
+        // 清本级统计
+        trialsThisLevel  = 0
+        correctThisLevel = 0
+
+        if distanceOKForPromotion() {
+            // ✅ 距离达标，正常晋级
+            bestPassedIdx = curLevelIdx
+            curLevelIdx  += 1
+            if curLevelIdx >= levels.count {
+                finishRound()
+                return
+            }
+        } else {
+            // ❌ 距离不达标，提示用户，继续留在本级
+            services?.speech.restartSpeak("请保持 1.2 米附近，继续本级测试。", delay: 0)
+            // 不修改 curLevelIdx
+        }
+
+        // 出下一题（或本级重来）
+        rollDirection()
+        showingE = true
+        scheduleListen()
+    }
+
+    // outcome
     struct EyeRes { var blue: Double?; var white: Double? }
     @Published var right = EyeRes()
     @Published var left  = EyeRes()
+    private var outcomeSnapshot: VAFlowOutcome?
     var outcome: VAFlowOutcome {
         outcomeSnapshot ?? .init(
             rightBlue: right.blue, rightWhite: right.white,
-            leftBlue:  left.blue,  leftWhite:  left.white)
+            leftBlue:  left.blue,  leftWhite:  left.white
+        )
     }
 
     override init() {
@@ -267,7 +274,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         buildLevels()
     }
 
-    // MARK: - Flow
+    // MARK: - Public flow
     func restart() {
         phase = .learn
         right = .init(); left = .init()
@@ -281,12 +288,12 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         outcomeSnapshot = nil
     }
 
-    // Learn (界面7)
+    // MARK: - Screen 7: Learn
     func onAppearLearn(_ svc: AppServices) {
         services = svc
         startFaceTracking()
         isInLearnIntro = true
-        showingE       = false
+        showingE = false
 
         let intro = """
         先练习四次：按顺序 左、右、上、下。看到意的开口方向后，以相应方向的头部动作回答。注意手机要与头部同高。
@@ -294,13 +301,12 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         svc.speech.restartSpeak(intro, delay: 0)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 16) { [weak self] in
-            guard let self = self else { return }
+            guard let self else { return }
             self.isInLearnIntro = false
             self.preparePractice()
         }
     }
 
-    // 固定 4 题
     private func preparePractice() {
         practiceQueue  = [.left, .right, .up, .down]
         practiceIndex  = 0
@@ -317,8 +323,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         practiceWork?.cancel()
 
         let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            guard self.phase == .learn else { return }
+            guard let self, self.phase == .learn else { return }
             self.resetHits()
             self.speakCurrentPrompt()
             self.practiceListening = true
@@ -335,9 +340,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         case .right: prompt = "开口向右，请向右转头。"
         case .up:    prompt = "开口向上，请向上抬头。"
         case .down:  prompt = "开口向下，请向下点头。"
-        @unknown default: prompt = ""
         }
-        guard !prompt.isEmpty else { return }
         services?.speech.stop()
         services?.speech.restartSpeak(prompt, delay: 0.15)
     }
@@ -361,21 +364,20 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
-    // Distance (界面8)
+    // MARK: - Screen 8: Distance
     func onAppearDistance(_ svc: AppServices) {
         services = svc
         svc.speech.stop()
         startFaceTracking()
         startTiltMonitor()
-        svc.speech.restartSpeak("固定手机与眼睛同高，退到 1.2 米。距离合适后自动开始。", delay: 0)
+        svc.speech.restartSpeak("请固定手机。人在正对手机的一米二外。距离正确后会自动开始。", delay: 0)
     }
 
-    // 竖直度监测（只在界面8）
     private func startTiltMonitor() {
         guard motion.isDeviceMotionAvailable else { return }
         motion.deviceMotionUpdateInterval = 1.0 / 30.0
         motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: motionQueue) { [weak self] dm, _ in
-            guard let self = self, let dm = dm else { return }
+            guard let self, let dm else { return }
             let gz = dm.gravity.z
             let tiltRad = asin(min(1.0, max(0.0, abs(gz))))
             let deg = Double(tiltRad) * 180.0 / .pi
@@ -405,7 +407,6 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         services?.speech.restartSpeak(text, delay: 0)
     }
 
-    // 显性测距的语音提示
     private func maybeSpeakDistanceHint(_ dMM: CGFloat) {
         guard phase == .distance else { return }
         let nearTh = minMM - zoneHysteresis
@@ -415,23 +416,27 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let now = Date()
         if now.timeIntervalSince(lastSpokenAt) < hintCooldown { return }
         lastSpokenAt = now; lastSpokenZone = zone
-        let text = (zone == .near) ? "距离不足，请移远一些。" : "距离过大，请靠近一些。"
+        let text = (zone == .near) ? "距离过近，请远一些。" : "距离过大，请近一些。"
         services?.speech.restartSpeak(text, delay: 0)
     }
 
-    // Test entry (界面9/10)
+    // MARK: - Screen 9/10: Test entry
     func onAppearTest(_ svc: AppServices, theme: Theme, eye: Eye) {
         services = svc
         let who = eye == .right ? "右眼" : "左眼"
         let side = eye == .right ? "左" : "右"
         let color = theme == .blue ? "蓝色" : "白色"
-        svc.speech.restartSpeak("现在测试\(who)。请闭上\(side)眼，先观看\(color)屏幕 20 秒。测时，看到意的开口方向后用头部动作回答。", delay: 0)
+         svc.speech.stop() // 保守：清掉上一个页面可能残留的发声
+         svc.speech.restartSpeak(
+           "现在测试\(who)。请闭上\(side)眼，先观看\(color)屏幕 20 秒。测时，看到意的开口方向后用头部动作回答。",
+           delay: 0.15
+         )
 
         adaptTimer?.invalidate(); adaptTimer = nil
         showAdaptCountdown = adaptSecs
         let expectedPhase = phase
         adaptTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] t in
-            guard let self = self else { t.invalidate(); return }
+            guard let self else { t.invalidate(); return }
             guard self.phase == expectedPhase else { t.invalidate(); self.adaptTimer = nil; return }
             if self.showAdaptCountdown > 1 {
                 self.showAdaptCountdown -= 1
@@ -443,9 +448,13 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
-    // Formal test
+    // MARK: - Formal test flow (3-trial rule per level)
     private func startLevelSequence() {
-        curLevelIdx = 0; bestPassedIdx = nil; wrongCntThisLv = 0
+        curLevelIdx = 0
+        bestPassedIdx = nil
+        trialsThisLevel = 0
+        correctThisLevel = 0
+
         rollDirection()
         showingE = true
         awaitingAnswer = false
@@ -460,7 +469,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         listenStartAt = Date()
 
         let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
+            guard let self else { return }
             self.awaitingAnswer = false
             self.evaluateAnswer()
         }
@@ -475,57 +484,71 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let anyHit = hitUp || hitDown || hitLeft || hitRight
         let hitTarget: Bool = {
             switch curDirection {
-            case .up:    return hitUp
-            case .down:  return hitDown
-            case .left:  return hitLeft
+            case .up: return hitUp
+            case .down: return hitDown
+            case .left: return hitLeft
             case .right: return hitRight
             }
         }()
 
-        let speech: String
-        let dur: TimeInterval
-        if !anyHit { speech = "未侦测到头部动作"; dur = speechNone }
-        else if hitTarget { speech = "正确"; dur = speechOK }
-        else { speech = "错误"; dur = speechOK }
+        if !anyHit {
+            services?.speech.restartSpeak("未侦测到头部动作", delay: 0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + speechNone) {
+                // 不计入 trials/correct；直接出下一题
+                self.rollDirection()
+                self.showingE = true
+                self.scheduleListen()
+            }
+            return
+        }
 
-        services?.speech.restartSpeak(speech, delay: 0)
-        DispatchQueue.main.asyncAfter(deadline: .now() + dur) {
-            self.processResult(correct: hitTarget)
+        let ok = hitTarget
+        services?.speech.restartSpeak(ok ? "正确" : "错误", delay: 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + speechOK) {
+            self.processResult(correct: ok)
         }
     }
 
     private func processResult(correct ok: Bool) {
-        if ok {
-            bestPassedIdx = curLevelIdx
-            curLevelIdx += 1; wrongCntThisLv = 0
-            if curLevelIdx >= levels.count { finishRound(); return }
-        } else {
-            wrongCntThisLv += 1
-            if wrongCntThisLv >= 3 {
-                // 隐藏测距：失败点抓一把距离看是否偏离过大
-                let d = distanceMM
-                if abs(d - targetMM) > failureInvalidateTol {
-                    showingE = false
-                    awaitingAnswer = false
-                    listenWork?.cancel()
-                    services?.speech.restartSpeak("测试中距离有变化，测试无效，需重测。", delay: 0)
-                    switch currentTheme() {
-                    case .blue?:
-                        right.blue = nil; left.blue = nil
-                        nextAfterDistance = .blueRight
-                    case .white?:
-                        right.white = nil; left.white = nil
-                        nextAfterDistance = .whiteRight
-                    default:
-                        nextAfterDistance = .blueRight
-                    }
-                    phase = .distance
-                    return
-                }
-                finishRound(); return
+        // 统计本级数据
+        trialsThisLevel += 1
+        if ok { correctThisLevel += 1 }
+
+        switch trialsThisLevel {
+        case 1:
+            // 出第 2 题
+            rollDirection()
+            showingE = true
+            scheduleListen()
+
+        case 2:
+            if correctThisLevel == 2 {
+                // 前两题全对 → 尝试晋级（距离不达标就留级）
+                advanceToNextLevelOrStay()
+            } else if correctThisLevel == 0 {
+                // 前两题全错 → 本级失败，直接收尾
+                failThisLevelAndFinish()
+            } else {
+                // 一对一错 → 出第 3 题
+                rollDirection()
+                showingE = true
+                scheduleListen()
+            }
+
+        default: // 第 3 题后（trialsThisLevel == 3）
+            if correctThisLevel >= 2 {
+                // 三题≥2对 → 尝试晋级（距离不达标就留级）
+                advanceToNextLevelOrStay()
+            } else {
+                // 0/3 或 1/3 → 本级失败，直接收尾
+                failThisLevelAndFinish()
             }
         }
-        rollDirection(); showingE = true; scheduleListen()
+    }
+
+    private func failThisLevelAndFinish() {
+        // 直接结束本级，按 bestPassedIdx 记分
+        finishRound()
     }
 
     private func currentTheme() -> Theme? {
@@ -537,38 +560,43 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     private func finishRound() {
-        let score = bestPassedIdx.map { levels[$0].logMAR } ?? levels.first!.logMAR + 0.1
+        let scoreS = bestPassedIdx.map { levels[$0].S } ?? (levels.first?.S ?? 3.8)
         switch phase {
         case .blueRight:
-            right.blue  = score
+            right.blue  = scoreS
             phase = .blueLeft
+
         case .blueLeft:
-            left.blue   = score
+            left.blue   = scoreS
             nextAfterDistance = .whiteRight
             services?.speech.restartSpeak("请再次退到一米二。距离合适后自动继续白色测试。", delay: 0)
             phase = .distance
+
         case .whiteRight:
-            right.white = score
+            right.white = scoreS
             phase = .whiteLeft
+
         case .whiteLeft:
-            left.white  = score
+            left.white  = scoreS
             outcomeSnapshot = VAFlowOutcome(
                 rightBlue: right.blue, rightWhite: right.white,
                 leftBlue:  left.blue,  leftWhite:  left.white
             )
             services?.speech.restartSpeak("测试结束。请取回手机。", delay: 0)
             phase = .end
-        default: break
+
+        default:
+            break
         }
     }
 
-    private func rollDirection() { curDirection = Dir.allCases.randomElement()! }
+    private func rollDirection() { curDirection = drawNextDir() }
 
-    // MARK: - AR Delegate
+    // MARK: - AR delegate
     func session(_ s: ARSession, didUpdate frame: ARFrame) {
         guard let face = frame.anchors.compactMap({ $0 as? ARFaceAnchor }).first else { return }
 
-        // 公共：距离 / pitch+Δz / 双眼相机坐标
+        // distance & pitch/dz
         let camT = frame.camera.transform
         let dMM = CGFloat(simd_distance(camT.columns.3, face.transform.columns.3) * 1000)
 
@@ -579,23 +607,22 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let rCam = toCameraSpace((face.transform * face.rightEyeTransform).position, camera: camT)
         let dz   = rCam.z - lCam.z
 
-        // 眼睛中心与相机在世界坐标的高度差（>0 眼睛更高）
+        // eye height vs camera (world)
         let leftWorld  = (face.transform * face.leftEyeTransform).position
         let rightWorld = (face.transform * face.rightEyeTransform).position
         let eyeCenterW = (leftWorld + rightWorld) * 0.5
         let camPosW    = SIMD3<Float>(camT.columns.3.x, camT.columns.3.y, camT.columns.3.z)
         let yEyeWorld  = eyeCenterW.y - camPosW.y
 
-        // 相机坐标下的人脸朝向（正脸判定：仅用于 HUD 显示）
+        // head pose (camera space)
         let faceInCamera = simd_inverse(camT) * face.transform
-        let r = SIMD3<Float>(faceInCamera.columns.0.x, faceInCamera.columns.0.y, faceInCamera.columns.0.z) // right
-        let u = SIMD3<Float>(faceInCamera.columns.1.x, faceInCamera.columns.1.y, faceInCamera.columns.1.z) // up
-        let f = SIMD3<Float>(faceInCamera.columns.2.x, faceInCamera.columns.2.y, faceInCamera.columns.2.z) // forward (+Z)
+        let r = SIMD3<Float>(faceInCamera.columns.0.x, faceInCamera.columns.0.y, faceInCamera.columns.0.z)
+        let u = SIMD3<Float>(faceInCamera.columns.1.x, faceInCamera.columns.1.y, faceInCamera.columns.1.z)
+        let f = SIMD3<Float>(faceInCamera.columns.2.x, faceInCamera.columns.2.y, faceInCamera.columns.2.z)
 
-        // “正脸≈0°”
-        let yawDegCam   = atan2f( f.x,  f.z) * 180 / .pi   // +右 / −左
-        let pitchDegCam = atan2f(-f.y,  f.z) * 180 / .pi   // +抬头 / −低头
-        let rollDegCam  = atan2f( r.y,  u.y) * 180 / .pi   // 侧倾
+        let yawDegCam   = atan2f( f.x,  f.z) * 180 / .pi
+        let pitchDegCam = atan2f(-f.y,  f.z) * 180 / .pi
+        let rollDegCam  = atan2f( r.y,  u.y) * 180 / .pi
 
         func wrap180(_ a: Float) -> Float { var x = a; if x > 180 { x -= 360 }; if x < -180 { x += 360 }; return x }
         let yawFixed   = wrap180(yawDegCam)
@@ -603,17 +630,14 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let rollFixed  = wrap180(rollDegCam)
 
         DispatchQueue.main.async {
-            // 公共状态 & HUD
             withAnimation(.easeOut(duration: 0.15)) { self.distanceMM = dMM }
             self.distanceInWindow = (dMM >= self.minMM && dMM <= self.maxMM)
             self.pitchDeg = pitchUnified
             self.deltaZ   = dz
 
-            // 眼高：同高判定
             self.eyeDeltaM   = yEyeWorld
             self.eyeHeightOK = abs(yEyeWorld) <= self.eyeHeightTolM
 
-            // 正脸显示（仅提示）
             self.yawFaceDeg   = yawFixed
             self.pitchFaceDeg = pitchFixed
             self.rollFaceDeg  = rollFixed
@@ -622,7 +646,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
                 abs(pitchFixed) <= self.headPitchAbs &&
                 abs(rollFixed)  <= self.headRollAbs
 
-            // ===== 分阶段：门控 vs 动作 =====
+            // gates vs action recognition
             let isLearnIntro = (self.phase == .learn && self.isInLearnIntro)
             let isPractice   = (self.phase == .learn && !self.isInLearnIntro)
             let isDistance   = (self.phase == .distance)
@@ -633,28 +657,21 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
                 }
             }()
 
-            // ① & ③：门控阶段——只做距离/同高/竖直（正脸仅提示，不拦截）
             if isLearnIntro || isDistance {
                 if isDistance {
                     self.maybeSpeakDistanceHint(dMM)
-
-                    // ✅ 放行条件：距离在窗内 + 眼高同高 + 手机竖直
                     if self.distanceInWindow && self.eyeHeightOK && self.tiltOK {
                         let next = self.nextAfterDistance
-                        self.phase = next
-                        self.services?.speech.restartSpeak("距离与姿势正确，开始测试。", delay: 0)
                         self.stopTiltMonitor()
+                        self.phase = next
                     } else if self.distanceInWindow {
-                        // 这些只提示，不拦截
                         if !self.eyeHeightOK { self.maybeSpeakEyeHeightHint(yEyeWorld) }
                         if !self.tiltOK      { self.maybeSpeakTiltHint() }
-                        // 注意：headPoseOK（正脸）仅用于 HUD 显示
                     }
                 }
-                return   // 门控阶段不进行“动作识别”
+                return
             }
 
-            // ② & ④：只做动作识别
             if isPractice || isTestPhase {
                 if self.practiceListening {
                     self.updateHits(pitch: pitchUnified, dz: dz)
@@ -672,7 +689,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
-    // ===== 头部动作辅助 =====
+    // MARK: - helpers
     private static func unifyPitchDegrees(_ raw: Float) -> Float {
         var p = raw
         if p < -90 { p += 180 } else if p > 90 { p -= 180 }
@@ -692,30 +709,27 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         if dz <= dzLeftThresh  { hitLeft  = true }
     }
 
-    private func isTargetHit(_ target: Dir) -> Bool {
-        switch target {
-        case .up:    return hitUp
-        case .down:  return hitDown
-        case .left:  return hitLeft
-        case .right: return hitRight
+    // MARK: - Level table
+    private func buildLevels() {
+        // S 行值与“裸 E 字高像素”映射
+        let entries: [(S: Double, px: CGFloat)] = [
+            (3.8, 500), (3.9, 400), (4.0, 315), (4.1, 250),
+            (4.2, 200), (4.3, 160), (4.4, 125), (4.5, 100),
+            (4.6,  80), (4.7,  65), (4.8,  50), (4.9,  40),
+            (5.0,  32), (5.1,  25),
+        ]
+        let scale = UIScreen.main.scale // @2x/@3x
+        self.levels = entries.map { e in
+            Level(S: e.S, sizePt: e.px / max(scale, 1)) // E字高的 point
         }
     }
 
-    // MARK: - Level table
-    private func buildLevels() {
-        // 3.8–5.1（未含四框像素）；显示时需 ×1.8
-        let px: [CGFloat] = [500,400,315,250,200,160,125,100,80,65,50,40,32,25]
-        let logs = stride(from: 0.7, through: -0.6, by: -0.1)
-        let scale = UIScreen.main.scale
-        levels = logs.enumerated().map { (i, l) in Level(logMAR: l, sizePt: px[i] * 1.8 / scale) }
-    }
-
-    // MARK: - AR
+    // AR
     private func startFaceTracking() {
         guard ARFaceTrackingConfiguration.isSupported else { return }
         let cfg = ARFaceTrackingConfiguration()
         cfg.isLightEstimationEnabled = false
-        session.run(cfg, options: [.resetTracking,.removeExistingAnchors])
+        session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
     }
 }
 
@@ -730,31 +744,23 @@ private struct VALearnPage: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 340)
-            } else {
-                if vm.showingE {
-                    VisualAcuityEView(
-                        orientation:       vm.curDirection.toOri,
-                        sizeUnits:         5,
-                        barThicknessUnits: 1,
-                        gapUnits:          1,
-                        eColor:            .black,
-                        borderColor:       .black,
-                        backgroundColor:   .clear
-                    )
-                    .frame(width: 220, height: 220)
-                }
+            } else if vm.showingE {
+                VisualAcuityEView(
+                    orientation: vm.curDirection.toOri,
+                    sizeUnits: 5, barThicknessUnits: 1, gapUnits: 1,
+                    eColor: .black, borderColor: .black, backgroundColor: .clear
+                )
+                .frame(width: 220, height: 220)
             }
         }
-        .overlay(alignment: .bottomLeading) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(vm.practiceText).foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.leading, 8).padding(.bottom, 10)
-            }
+        .overlay(alignment: .bottom) {
+            Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center) // ← 水平居中
+                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
+                .allowsHitTesting(false) // 不挡住底部按钮（可选）
         }
     }
 }
@@ -763,9 +769,11 @@ private struct VATestPage: View {
     @ObservedObject var vm: VAViewModel
     let theme: VAViewModel.Theme
     let eye:   VAViewModel.Eye
+
     var body: some View {
         let bg = theme == .blue ? Color.black : Color.white
         let fg = theme == .blue ? Color.blue  : Color.black
+
         ZStack {
             bg
             if vm.showAdaptCountdown > 0 {
@@ -773,6 +781,7 @@ private struct VATestPage: View {
                     .font(.system(size: 110, weight: .heavy))
                     .foregroundColor(fg)
             } else if vm.showingE {
+                // E 四框总边长 = E字高 × 9/5
                 let side = vm.sizePtCurrent * 9.0 / 5.0
                 VisualAcuityEView(
                     orientation: vm.curDirection.toOri,
@@ -783,13 +792,24 @@ private struct VATestPage: View {
             }
         }
         .overlay(alignment: .bottomLeading) {
-            Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
-                .font(.system(size: 24, weight: .regular))
-                .foregroundColor(theme == .blue ? .white.opacity(0.7) : .black.opacity(0.7))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.leading, 8).padding(.bottom, 10)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 20)
+            VStack(alignment: .leading, spacing: 6) {
+                if let s = vm.currentS {
+                    Text(String(format: "S %.1f", s))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme == .blue ? .white : .black)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(theme == .blue ? Color.white.opacity(0.10)
+                                                   : Color.black.opacity(0.06))
+                        .cornerRadius(8)
+                }
+
+                Text(String(format: "pitch %.1f°   Δz %.3fm", vm.pitchDeg, vm.deltaZ))
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(theme == .blue ? .white.opacity(0.7) : .black.opacity(0.7))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
         }
     }
 }
@@ -812,13 +832,9 @@ private struct VAEndPage: View {
             VStack(spacing: 24) {
                 Spacer().frame(height: 120)
 
-                Image("finished")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 92, height: 92)
+                Image("finished").resizable().scaledToFit().frame(width: 92, height: 92)
 
-                Text("测试完成")
-                    .font(.system(size: 42))
+                Text("测试完成").font(.system(size: 42))
 
                 Spacer().frame(height: 170)
 
@@ -830,8 +846,7 @@ private struct VAEndPage: View {
                 .padding(.top, 8)
 
                 Text("系统是如何通过视力VA计算屈光不正度数？")
-                    .font(.footnote)
-                    .foregroundColor(.blue)
+                    .font(.footnote).foregroundColor(.blue)
                     .onTapGesture { showingInfo = true }
                     .padding(.top, 8)
 
@@ -841,115 +856,33 @@ private struct VAEndPage: View {
         }
         .sheet(isPresented: $showingInfo) {
             NavigationStack {
-                ScrollView {
-                    Text("有待加入正式内容").padding()
-                }
-                .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
-                .navigationBarTitleDisplayMode(.inline)
+                ScrollView { Text("有待加入正式内容").padding() }
+                    .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
+                    .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
 }
 
-// MARK: - Canvas（保持不变）
-struct VAEndPage_Canvas: View {
-    @ObservedObject var vm: VAViewModel
-    let onAgain: () -> Void
-    let onSubmitTap: () -> Void
-    var body: some View {
-        VAEndPage(vm: vm, onAgain: onAgain, onSubmitTap: onSubmitTap)
-    }
-}
-
-// 次行动按钮（5A 风格）
-private struct GhostPrimaryButton: View {
-    let title: String
-    var action: () -> Void
-    var enabled: Bool = true
-    var height: CGFloat = 30
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.white.opacity(enabled ? 1 : 0.5))
-                .frame(maxWidth: .infinity, minHeight: height)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(Color.black.opacity(enabled ? 0.80 : 0.40))
-                )
-        }
-        .buttonStyle(.plain)
-        .buttonStyle(PressFeedbackStyle(scale: 0.985, dimOpacity: 0.28, duration: 0.035))
-        .disabled(!enabled)
-    }
-}
-
-
-// MARK: - Tools
-fileprivate extension simd_float4x4 { var position: SIMD3<Float> { .init(columns.3.x, columns.3.y, columns.3.z) } }
-fileprivate func toCameraSpace(_ world: SIMD3<Float>, camera camT: simd_float4x4) -> SIMD3<Float> {
-    let inv = simd_inverse(camT)
-    let v4  = SIMD4<Float>(world.x, world.y, world.z, 1)
-    let c   = inv * v4
-    let w   = c.w == 0 ? Float.leastNonzeroMagnitude : c.w
-    return SIMD3<Float>(c.x / w, c.y / w, c.z / w)
-}
-private extension VAViewModel.Dir {
-    var toOri: VisualAcuityEView.Orientation {
-        switch self { case .up: .up; case .down: .down; case .left: .left; case .right: .right }
-    }
-}
-private extension Array {
-    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
-}
-
-// MARK: - HUD 辅助
-fileprivate struct GlowingDot: View {
-    @State private var pulse = false
-    var body: some View {
-        ZStack {
-            Circle().fill(Color.green).frame(width: 14, height: 14)
-            Circle()
-                .stroke(Color.green.opacity(0.7), lineWidth: 2)
-                .frame(width: 22, height: 22)
-                .scaleEffect(pulse ? 1.25 : 0.95)
-                .opacity(pulse ? 0.15 : 0.35)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-        .shadow(color: .green.opacity(0.6), radius: 8)
-    }
-}
-
-// MARK: - 距离 HUD（单条纵向指示）
+// MARK: - HUD (distance bar)
 fileprivate struct DistanceBarsHUD: View {
-    // 来自 VM
     let distanceMM: CGFloat
     let tiltDeg: Double
     let tiltOK: Bool
     let tiltLimitDeg: Double
     let eyeDeltaM: Float
     let eyeHeightOK: Bool
-    // 正脸状态 + 三轴（只显示）
     let headPoseOK: Bool
     let yaw: Double
     let pitch: Double
     let roll: Double
 
-    // 配置
     private let target: CGFloat = 1200
     private let maxDiff: CGFloat = 500
     private let barWidth: CGFloat = 12
     private let trackPadding: CGFloat = 0.08
 
-    private var diff: CGFloat {
-        guard distanceMM.isFinite else { return maxDiff }
-        return distanceMM - target
-    }
+    private var diff: CGFloat { (distanceMM.isFinite ? distanceMM : target + maxDiff) - target }
     private var ratio: CGFloat { max(0, min(1, abs(diff) / maxDiff)) }
     private var barColor: Color {
         if abs(diff) < 1 { return .green }
@@ -985,7 +918,6 @@ fileprivate struct DistanceBarsHUD: View {
                         .animation(.easeOut(duration: 0.15), value: barColor)
                 }
 
-                // 右下角显示与1200的差值
                 VStack {
                     Spacer()
                     HStack {
@@ -1008,15 +940,12 @@ fileprivate struct DistanceBarsHUD: View {
                 }
             }
         }
-        // 左下角叠加：倾斜/同高 + 正脸
         .overlay(alignment: .bottomLeading) {
             VStack(alignment: .leading, spacing: 6) {
-                // 倾斜
                 Text(String(format: "倾斜 %.1f°", tiltDeg))
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
 
-                // 高差：同高 or “高差 xxmm”
                 let mm = abs(Double(eyeDeltaM * 1000))
                 Text(eyeHeightOK ? "同高" : String(format: "高差 %.0fmm", mm))
                     .font(.system(size: 14, weight: .regular))
@@ -1030,14 +959,12 @@ fileprivate struct DistanceBarsHUD: View {
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Color.white.opacity(0.08)).cornerRadius(8)
 
-                // 正脸可视化（仅提示，不拦截）
                 HStack(spacing: 8) {
                     Text(headPoseOK ? "正脸 ✓" : "正脸 ×")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(headPoseOK ? .green : .red)
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Color.white.opacity(0.08)).cornerRadius(8)
-
                     Text(String(format: "yaw %.0f°  pitch %.0f°  roll %.0f°", yaw, pitch, roll))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(.white.opacity(0.75))
@@ -1050,28 +977,41 @@ fileprivate struct DistanceBarsHUD: View {
     }
 }
 
-
-#if DEBUG
-import SwiftUI
-
-struct VAEndPage_LiveCanvas_Previews: PreviewProvider {
-    static var previews: some View {
-        // 1) 准备一个示例 VM，确保结果页能显示
-        let vm = VAViewModel()
-        vm.phase = .end
-        vm.right = .init(blue: 0.10, white: 0.20)
-        vm.left  = .init(blue: 0.15, white: 0.25)
-
-        // 2) 直接预览结束页（界面 11）
-        return VAEndPage(
-            vm: vm,
-            onAgain:     { /* 预览里不做事 */ },
-            onSubmitTap: { /* 预览里不做事 */ }
-        )
-        // 如果你的项目需要，这里保留/移除环境对象即可
-        .environmentObject(AppServices())
-        .previewDisplayName("界面 11 · 结束页（含按压反馈）")
-        .frame(width: 390, height: 844)  // iPhone 15 Pro 尺寸，随意
+// MARK: - Small bits
+fileprivate struct GlowingDot: View {
+    @State private var pulse = false
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.green).frame(width: 14, height: 14)
+            Circle()
+                .stroke(Color.green.opacity(0.7), lineWidth: 2)
+                .frame(width: 22, height: 22)
+                .scaleEffect(pulse ? 1.25 : 0.95)
+                .opacity(pulse ? 0.15 : 0.35)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+        .shadow(color: .green.opacity(0.6), radius: 8)
     }
 }
-#endif
+
+fileprivate extension simd_float4x4 { var position: SIMD3<Float> { .init(columns.3.x, columns.3.y, columns.3.z) } }
+fileprivate func toCameraSpace(_ world: SIMD3<Float>, camera camT: simd_float4x4) -> SIMD3<Float> {
+    let inv = simd_inverse(camT)
+    let v4  = SIMD4<Float>(world.x, world.y, world.z, 1)
+    let c   = inv * v4
+    let w   = c.w == 0 ? Float.leastNonzeroMagnitude : c.w
+    return SIMD3<Float>(c.x / w, c.y / w, c.z / w)
+}
+private extension VAViewModel.Dir {
+    var toOri: VisualAcuityEView.Orientation {
+        switch self { case .up: .up; case .down: .down; case .left: .left; case .right: .right }
+    }
+}
+private extension Array {
+    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
+}
+
