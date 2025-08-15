@@ -830,9 +830,19 @@ private struct VAEndPage: View {
         ZStack {
             Color.white.ignoresSafeArea()
             VStack(spacing: 24) {
-                Spacer().frame(height: 120)
-
-                Image("finished").resizable().scaledToFit().frame(width: 92, height: 92)
+                Color.clear.frame(height:140)
+                AnimatedFinishBadge(
+                    size: 122,
+                    color: Color(red: 0.17, green: 0.85, blue: 0.67),
+                    checkXOffset: 10,
+                    checkYOffset: -20,
+                    dotSizeMul: 1.20,
+                    dotAngleDeg: -130,
+                    dotRadiusMul: 0.86,
+                    dotXOffset: 0,
+                    dotYOffset: 0
+                )
+                .frame(width: 112, height: 112)
 
                 Text("测试完成").font(.system(size: 42))
 
@@ -842,10 +852,10 @@ private struct VAEndPage: View {
                     GhostPrimaryButton(title: "再测一次") { onAgain() }
                     GlowButton(title: "提交结果", disabled: !canSubmit) { onSubmitTap() }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 1)
                 .padding(.top, 8)
 
-                Text("系统是如何通过视力VA计算屈光不正度数？")
+                Text("为什么多次测量能有效降低误差？")
                     .font(.footnote).foregroundColor(.blue)
                     .onTapGesture { showingInfo = true }
                     .padding(.top, 8)
@@ -1015,3 +1025,28 @@ private extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
 
+
+
+
+
+
+#if DEBUG
+import SwiftUI
+
+struct VAEndPage_LiveCanvas_Previews: PreviewProvider {
+    static var previews: some View {
+        let vm = VAViewModel()
+        vm.phase = .end
+        vm.right = .init(blue: 0.10, white: 0.20)
+        vm.left  = .init(blue: 0.15, white: 0.25)
+        return VAEndPage(
+            vm: vm,
+            onAgain:     { },
+            onSubmitTap: { }
+        )
+        .environmentObject(AppServices())
+        .previewDisplayName("界面 11 · 结束页（含按压反馈）")
+        .frame(width: 390, height: 844)
+    }
+}
+#endif

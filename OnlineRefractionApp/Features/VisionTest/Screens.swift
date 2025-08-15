@@ -625,11 +625,11 @@ struct ResultV2View_Previews: PreviewProvider {
         s.cfLeftD  = 0.70
 
         return ResultV2View(
-            pdText: "62.5 mm",
+            pdText: "67.5 mm",
             rightAxisDeg: s.cylR_axisDeg, leftAxisDeg: s.cylL_axisDeg,
             rightFocusMM: s.cylR_clarityDist_mm, leftFocusMM: s.cylL_clarityDist_mm,
-            rightBlue: 1.2, rightWhite: 1.0,
-            leftBlue: 1.1, leftWhite: 0.9
+            rightBlue: 4.3, rightWhite: 4.5,
+            leftBlue: 4.6, leftWhite: 4.7
         )
         .environmentObject(AppServices())
         .environmentObject(s)
