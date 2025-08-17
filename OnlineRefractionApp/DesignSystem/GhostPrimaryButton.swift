@@ -3,7 +3,7 @@ import SwiftUI
 struct GhostPrimaryButton: View {
     let title: String
     var enabled: Bool = true
-    var height: CGFloat = 56
+    var height: CGFloat = 52
     var action: () -> Void
 
     var body: some View {

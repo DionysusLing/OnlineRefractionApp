@@ -15,108 +15,119 @@ struct FixedHeightFieldStyle: TextFieldStyle {
 struct TypeCodeV2View: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices
-
+    
     var onNext: () -> Void
     init(onNext: @escaping () -> Void = {}) { self.onNext = onNext }
-
+    
     @State private var ageOK = true
     @State private var myopiaOnly = true
     @State private var code = ""
     @State private var agreed = true
-
+    
     @State private var showService = false
     @State private var showPrivacy = false
-
+    
     // 进入页面 2 秒后才允许点击
     @State private var canTapPrimary = false
-
+    
     // 键盘焦点
     @FocusState private var codeFieldFocused: Bool
-
+    
     private let headerH: CGFloat = 120
     private static var hasSpokenIntro = false
-
-    // 仅当“正确输入为 0”时才切到“医师验光”，否则一律显示“快速验光”
+    
+    // ✅ 新逻辑：内置邀请码 或 “0” 体验码 都算有效
     private var isDoctorCodeValid: Bool {
-        code.trimmingCharacters(in: .whitespacesAndNewlines) == "0"
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed == "0" || (InviteValidator.validate(trimmed) == .ok)
     }
     private var primaryTitle: String {
         isDoctorCodeValid ? "医师模式" : "快速验光"
     }
+    
+    // 👉 拆小：头部
+    private var headerView: some View {
+        V2BlueHeader(title: "适用条件", subtitle: nil, progress: nil)
+            .padding(.top, 44)
+            .frame(maxWidth: .infinity)
+            .frame(height: headerH)
+            .ignoresSafeArea(edges: .top)
+    }
 
+    // 👉 拆小：表单（把你 ScrollView 里的内容整体搬进来）
+    private var formView: some View {
+        // 显式一个 CGFloat，避免 0.20 的字面量参与推断
+        let formTopPadding: CGFloat = headerH * 0.20
+
+        return ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                Color.clear.frame(height: 10)
+
+                HStack {
+                    Spacer()
+                    Image("mainpic")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 220, height: 220)
+                    Spacer()
+                }
+                Color.clear.frame(height: 30)
+
+                ChipToggle(label: "我的年龄在 16–55 岁间", isOn: $ageOK)
+                ChipToggle(label: "我是近视，不是远视", isOn: $myopiaOnly)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("邀请码｜医师模式")
+                        .font(ThemeV2.Fonts.note())
+                        .foregroundColor(ThemeV2.Colors.subtext)
+
+                    TextField("在这里输入或粘贴邀请码/输0体验", text: $code)
+                        .keyboardType(.numberPad)
+                        .focused($codeFieldFocused)
+                        .textFieldStyle(FixedHeightFieldStyle(height: 48))
+                        .onSubmit { proceed() }
+                        .onChange(of: code) { newValue in
+                            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if trimmed == "0" {
+                                if code != "0" { code = "0" }
+                                codeFieldFocused = false
+                            }
+                        }
+                }
+                .padding(16)
+                .background(ThemeV2.Colors.card)
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(ThemeV2.Colors.border, lineWidth: 1))
+                .cornerRadius(20)
+
+                Toggle(isOn: $agreed) {
+                    HStack(spacing: 4) {
+                        Text("我已阅读并同意").foregroundColor(ThemeV2.Colors.subtext)
+                        Button("服务协议") { showService = true }.foregroundColor(ThemeV2.Colors.brandBlue)
+                        Text("与").foregroundColor(ThemeV2.Colors.subtext)
+                        Button("隐私条款") { showPrivacy = true }.foregroundColor(ThemeV2.Colors.brandBlue)
+                    }
+                    .font(ThemeV2.Fonts.note())
+                }
+                .toggleStyle(SwitchToggleStyle(tint: ThemeV2.Colors.brandBlue))
+
+                GlowButton(title: primaryTitle, disabled: !canTapPrimary) {
+                    proceed()
+                }
+                .padding(.top, 6)
+
+                HStack { Spacer(); SpeakerView(); Spacer() }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, formTopPadding)   // ← 显式 CGFloat
+            .padding(.bottom, 24)
+        }
+    }
+
+    // 👉 最终 body 就很“清爽”了
     var body: some View {
         ZStack(alignment: .top) {
-            V2BlueHeader(title: "适用条件", subtitle: nil, progress: nil)
-                .padding(.top, 44)
-                .frame(maxWidth: .infinity)
-                .frame(height: headerH)
-                .ignoresSafeArea(edges: .top)
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Color.clear.frame(height: 10)
-
-                    HStack {
-                        Spacer()
-                        Image("mainpic")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 220, height: 220)
-                        Spacer()
-                    }
-                    Color.clear.frame(height: 30)
-
-                    ChipToggle(label: "我的年龄在 16–60 岁间", isOn: $ageOK)
-                    ChipToggle(label: "我是近视，不是远视", isOn: $myopiaOnly)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("邀请码｜医师模式")
-                            .font(ThemeV2.Fonts.note())
-                            .foregroundColor(ThemeV2.Colors.subtext)
-
-                        TextField("在这里输入或粘贴邀请码/输0体验", text: $code)
-                            .keyboardType(.numberPad)
-                            .focused($codeFieldFocused)
-                            .textFieldStyle(FixedHeightFieldStyle(height: 48))
-                            .onSubmit { proceed() } // 回车同样受 canTapPrimary 限制
-                            .onChange(of: code) { newValue in
-                                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                                // 仅当输入“0”视为有效并自动收起键盘；其他任何内容不提示也不处理
-                                if trimmed == "0" {
-                                    // 规范化内容为单个“0”（防止用户输入“ 0 ”之类）
-                                    if code != "0" { code = "0" }
-                                    codeFieldFocused = false // ✅ 收起键盘
-                                }
-                            }
-                    }
-                    .padding(16)
-                    .background(ThemeV2.Colors.card)
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(ThemeV2.Colors.border, lineWidth: 1))
-                    .cornerRadius(20)
-
-                    Toggle(isOn: $agreed) {
-                        HStack(spacing: 4) {
-                            Text("我已阅读并同意").foregroundColor(ThemeV2.Colors.subtext)
-                            Button("服务协议") { showService = true }.foregroundColor(ThemeV2.Colors.brandBlue)
-                            Text("与").foregroundColor(ThemeV2.Colors.subtext)
-                            Button("隐私条款") { showPrivacy = true }.foregroundColor(ThemeV2.Colors.brandBlue)
-                        }
-                        .font(ThemeV2.Fonts.note())
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: ThemeV2.Colors.brandBlue))
-
-                    // 主按钮：2 秒内禁用
-                    GlowButton(title: primaryTitle, disabled: !canTapPrimary) {
-                        proceed()
-                    }
-                    .padding(.top, 6)
-
-                    HStack { Spacer(); SpeakerView(); Spacer() }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, headerH * 0.20)
-                .padding(.bottom, 24)
-            }
+            headerView
+            formView
         }
         .background(ThemeV2.Colors.page.ignoresSafeArea())
         .onAppear {
@@ -154,7 +165,7 @@ struct TypeCodeV2View: View {
             }
         }
     } // ← body 结束
-
+    
     // MARK: - 法务文案（类型作用域，非 body 内）
     private enum LegalText {
         static let serviceAgreement = """
@@ -220,44 +231,62 @@ struct TypeCodeV2View: View {
 本政策可能适时修订。更新后我们将在应用中公布最新版本；您继续使用本应用即表示同意该等更新。若您不同意更新内容，可停止使用本应用并联系我们处理相关事宜。
 """
     }
-    // MARK: - 分流逻辑（仅“0”进入医师模式）
+    
+    // MARK: - 分流逻辑（内置邀请码 或 “0” → 医师模式）
     private func proceed() {
-        guard canTapPrimary else { return } // 未到 2 秒直接 return
+        guard canTapPrimary else { return }
         guard agreed && ageOK && myopiaOnly else {
             services.speech.restartSpeak("请先确认基础条件并同意协议。", delay: 0)
             return
         }
-        if isDoctorCodeValid {
-            // 医师模式；键盘已在 onChange 收起，这里再确保一下
+        
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 保留你的“0 = 体验医师模式”
+        if trimmed == "0" {
             codeFieldFocused = false
             onNext()
+            return
+        }
+        
+        // 非空 → 当作邀请码；空 → 快速模式
+        if !trimmed.isEmpty {
+            switch InviteValidator.validateAndConsume(trimmed) {
+            case .ok:
+                codeFieldFocused = false
+                onNext() // 进入医师模式
+            case .alreadyUsed:
+                services.speech.restartSpeak("该邀请码已被使用。", delay: 0)
+            case .notInWhitelist, .invalidFormat:
+                services.speech.restartSpeak("邀请码无效。", delay: 0)
+            }
         } else {
-            // 非“0”与空白都走快速模式；无任何额外提醒
             state.startFastMode()
-            state.path.append(.cf(.fast))   // 先做 CF（快速流程）
+            state.path.append(.cf(.fast))
         }
     }
-}
-
-
-// MARK: - 预览
+    
+    
+    
+    // MARK: - 预览
 #if DEBUG
-struct TypeCodeV2View_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            TypeCodeV2View()
-                .environmentObject(AppServices())
-                .environmentObject(AppState())
-                .previewDisplayName("TypeCode · Light")
-                .previewDevice("iPhone 15 Pro")
-
-            TypeCodeV2View()
-                .environmentObject(AppServices())
-                .environmentObject(AppState())
-                .preferredColorScheme(.dark)
-                .previewDisplayName("TypeCode · Dark")
-                .previewDevice("iPhone 15 Pro")
+    struct TypeCodeV2View_Previews: PreviewProvider {
+        static var previews: some View {
+            Group {
+                TypeCodeV2View()
+                    .environmentObject(AppServices())
+                    .environmentObject(AppState())
+                    .previewDisplayName("TypeCode · Light")
+                    .previewDevice("iPhone 15 Pro")
+                
+                TypeCodeV2View()
+                    .environmentObject(AppServices())
+                    .environmentObject(AppState())
+                    .preferredColorScheme(.dark)
+                    .previewDisplayName("TypeCode · Dark")
+                    .previewDevice("iPhone 15 Pro")
+            }
         }
     }
-}
 #endif
+}

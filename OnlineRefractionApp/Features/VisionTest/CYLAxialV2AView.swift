@@ -25,7 +25,7 @@ struct CYLAxial2AView: View {
     private let loopGap: Double = 0.4
 
     private var guideButtonTitle: String {
-        eye == .right ? "明白了。开始闭左眼测右眼" : "开始闭右眼测左眼"
+        eye == .right ? "开始闭左眼测右眼" : "开始闭右眼测左眼"
     }
 
     var body: some View {

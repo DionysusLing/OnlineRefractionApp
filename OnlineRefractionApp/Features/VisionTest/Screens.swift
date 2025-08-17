@@ -28,7 +28,7 @@ struct CYLAxialAView: View {
     @State private var showChoices = false
 
     private var guideButtonTitle: String {
-        eye == .right ? "明白了。开始闭左眼测右眼" : "开始闭右眼测左眼"
+        eye == .right ? "开始闭左眼测右眼" : "开始闭右眼测左眼"
     }
 
     var body: some View {

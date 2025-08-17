@@ -5,6 +5,7 @@ import ARKit
 import Combine
 import simd
 import CoreMotion
+import UIKit   // 需要用到 UIApplication
 
 // MARK: - Outcome passed to Result page
 public struct VAFlowOutcome {
@@ -16,6 +17,7 @@ public struct VAFlowOutcome {
 
 // MARK: - Entry
 public struct VAFlowView: View {
+
     @EnvironmentObject private var services: AppServices
     @StateObject private var vm: VAViewModel
 
@@ -32,6 +34,14 @@ public struct VAFlowView: View {
             return m
         }())
     }
+    // 兼容写法：取当前前台 keyWindow 的顶部安全区高度
+    private var topSafeInset: CGFloat {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        let key = scene?.windows.first { $0.isKeyWindow }
+        return key?.safeAreaInsets.top ?? 0
+    }
 
         public var body: some View {
             ZStack {
@@ -39,6 +49,15 @@ public struct VAFlowView: View {
                 case .learn:
                     VALearnPage(vm: vm)
                         .guardedScreen(brightness: 0.70)
+                        .overlay(alignment: .topLeading) {
+                            MeasureTopHUD(
+                                title: Text("4").foregroundColor(Color(red: 0.157, green: 0.78, blue: 0.435))
+                                     + Text(" / 4 视力 - 练习").foregroundColor(.secondary),
+                                measuringEye: nil,
+                                bothActive: true
+                            )
+                            .padding(.top, topSafeInset + 6)
+                        }
                         .onAppear { vm.onAppearLearn(services) }
 
                 case .distance:
@@ -51,6 +70,18 @@ public struct VAFlowView: View {
                     )
                     .guardedScreen(brightness: 0.70)
                     .onAppear { vm.onAppearDistance(services) }
+                    .overlay(alignment: .topLeading) {
+                        MeasureTopHUD(
+                            title:
+                                Text("4")
+                                    .foregroundColor(Color(red: 0.157, green: 0.78, blue: 0.435)) // #28C76F
+                            +   Text(" / 4 视力 - 测距")
+                                    .foregroundColor(.white.opacity(0.8)),
+                            measuringEye: nil,
+                            bothActive: true
+                        )
+                        .padding(.top, topSafeInset + 6)   // ← 让标题避开刘海/状态栏
+                    }
 
                 case .blueRight:
                     VATestPage(vm: vm, theme: .blue, eye: .right)
@@ -296,7 +327,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         showingE = false
 
         let intro = """
-        先练习四次：按顺序 左、右、上、下。看到意的开口方向后，以相应方向的头部动作回答。注意手机要与头部同高。
+        手机与头部同高。先练习四次：按顺序 左、右、上、下。看到意的开口方向后，以相应方向的头部动作回答。
         """
         svc.speech.restartSpeak(intro, delay: 0)
 
@@ -428,7 +459,7 @@ final class VAViewModel: NSObject, ObservableObject, ARSessionDelegate {
         let color = theme == .blue ? "蓝色" : "白色"
          svc.speech.stop() // 保守：清掉上一个页面可能残留的发声
          svc.speech.restartSpeak(
-           "现在测试\(who)。请闭上\(side)眼，先观看\(color)屏幕 20 秒。测时，看到意的开口方向后用头部动作回答。",
+           "现在测试\(who)。请闭上\(side)眼，观看\(color)屏幕。二十秒到计时结束后正式测试。看到意的开口方向后用头部动作回答。",
            delay: 0.15
          )
 
@@ -778,7 +809,8 @@ private struct VATestPage: View {
             bg
             if vm.showAdaptCountdown > 0 {
                 Text("\(vm.showAdaptCountdown)")
-                    .font(.system(size: 110, weight: .heavy))
+                    .font(.system(size: 72, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
                     .foregroundColor(fg)
             } else if vm.showingE {
                 // E 四框总边长 = E字高 × 9/5
@@ -1086,6 +1118,80 @@ private extension Array {
 
 
 
+
+
+
+
+#if DEBUG
+import SwiftUI
+
+
+/// 预览 1：界面 7 · 引导页（展示引导图，不显示 E）
+private struct Screen7_LearnIntro_Preview: View {
+    @StateObject private var vm = VAViewModel()
+    var body: some View {
+        VALearnPage(vm: vm)
+            .onAppear {
+                vm.phase = .learn
+                vm.isInLearnIntro = true   // 显示“headmove”引导图
+                vm.showingE = false
+            }
+            .environmentObject(AppServices(speech: SilentSpeechService()))
+            .frame(width: 390, height: 844)
+            .previewDisplayName("界面 7 · 引导")
+    }
+}
+
+/// 预览 2：界面 7 · 练习页（显示 E，方向可改 .left/.right/.up/.down）
+private struct Screen7_LearnPractice_Preview: View {
+    @StateObject private var vm = VAViewModel()
+    var body: some View {
+        VALearnPage(vm: vm)
+            .onAppear {
+                vm.phase = .learn
+                vm.isInLearnIntro = false  // 退出引导
+                vm.showingE = true         // 显示 E
+                vm.curDirection = .left    // 练习方向
+                vm.pitchDeg = 12           // 底部调试文字演示
+                vm.deltaZ   = 0.02
+            }
+            .environmentObject(AppServices(speech: SilentSpeechService()))
+            .frame(width: 390, height: 844)
+            .previewDisplayName("界面 7 · 练习（E）")
+    }
+}
+
+struct VAFlow_LearnHUD_Previews: PreviewProvider {
+    static var previews: some View {
+        VAFlowView() // 默认 phase = .learn
+            .environmentObject(AppServices(speech: SilentSpeechService()))
+            .environmentObject(AppState())
+            .previewDisplayName("界面 7 · 学习页（含顶部标题）")
+            .frame(width: 390, height: 844)
+    }
+}
+#endif
+
+#if DEBUG
+import SwiftUI
+
+// 预览用静音语音服务，避免在 Canvas 里发声
+private final class PreviewSilentSpeech: SpeechServicing {
+    func speak(_ text: String) {}
+    func stop() {}
+    func restartSpeak(_ text: String, delay: TimeInterval) {}
+}
+
+struct VAFlowView_Distance_Previews: PreviewProvider {
+    static var previews: some View {
+        VAFlowView(startAtDistance: true, onFinish: { _ in })
+            .environmentObject(AppState())                                   // 你的全局状态
+            .environmentObject(AppServices(speech: PreviewSilentSpeech()))   // 预览用服务
+            .previewDisplayName("视力 · 测距（第 4/4）")
+            .previewDevice("iPhone 15 Pro")
+    }
+}
+#endif
 
 #if DEBUG
 import SwiftUI

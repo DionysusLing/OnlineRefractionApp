@@ -1,0 +1,29 @@
+import SwiftUI
+
+struct EntryView: View {
+    @State private var updateInfo: UpdateInfo?
+
+    var body: some View {
+        ContentView()
+            .task {
+                if let info = try? await UpdateChecker.checkAppStore() {
+                    updateInfo = info
+                }
+            }
+            .alert(isPresented: Binding(
+                get: { updateInfo != nil },
+                set: { if !$0 { updateInfo = nil } }
+            )) {
+                Alert(
+                    title: Text("有新版本 \(updateInfo?.version ?? "")"),
+                    message: Text(updateInfo?.notes ?? "前往 App Store 查看更新内容。"),
+                    primaryButton: .default(Text("去更新")) {
+                        if let url = updateInfo?.appStoreURL {
+                            UpdateChecker.openAppStore(url)
+                        }
+                    },
+                    secondaryButton: .cancel(Text("稍后"))
+                )
+            }
+    }
+}

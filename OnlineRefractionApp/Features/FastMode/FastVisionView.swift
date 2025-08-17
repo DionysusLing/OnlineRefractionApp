@@ -174,7 +174,7 @@ struct FastVisionView: View {
                 .overlay(alignment: .topLeading) {
                     MeasureTopHUD(
                         title:
-                            Text("2").foregroundColor(brandGreen) +
+                            Text("2 3").foregroundColor(brandGreen) +
                             Text(" / 4 视力&瞳距测量").foregroundColor(.secondary),
                         measuringEye: (eye == .left ? .left : .right)
                     )

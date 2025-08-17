@@ -55,7 +55,7 @@ struct AstigmatismSolidifyAnimation: View {
                 let r2Aligned = (avoidPartialOuterDash && remain < dashLength) ? (r2Raw - remain) : r2Raw
 
                 // 圆头会伸出半线宽 → 两端各内缩
-                let strokeW: CGFloat = lineWidth + 1.0
+                let strokeW: CGFloat = (lineWidth + 1.0) * 0.5
                 let inset = strokeW * 0.5
                 let r1 = r1Raw + inset
                 let r2 = r2Aligned - inset
@@ -131,7 +131,6 @@ fileprivate struct DualDashedSpokesLocal: Shape {
         return p
     }
 }
-
 
 #if DEBUG
 struct AstigmatismSolidifyAnimation_Previews: PreviewProvider {
