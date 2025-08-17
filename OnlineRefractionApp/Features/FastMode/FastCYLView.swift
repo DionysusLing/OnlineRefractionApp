@@ -171,7 +171,7 @@ struct FastCYLView: View {
             VStack(spacing: 16) {
                 if phase == .guide {
                     GhostPrimaryButton(
-                        title: eye == .right ? "开始闭左眼测右眼" : "开始闭右眼测左眼",
+                        title: eye == .right ? "？开始闭左眼测右眼" : "开始闭右眼测左眼",
                         enabled: canContinue
                     ) {
                         // 停止动画循环，切入判定

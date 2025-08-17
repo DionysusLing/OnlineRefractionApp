@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// 5D · 锁定“最清晰距离”(有测距)
-/// - 语音播报结束后按钮才可点（时长可改）
-/// - 点按钮：记录距离 → 按钮消失 → 显示绿色胶囊“已记录” → 停留 2s 再进入下一步
+
 struct CYLDistanceV2View: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var services: AppServices

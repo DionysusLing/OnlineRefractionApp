@@ -21,6 +21,9 @@
 		8C663CFD2E40B65F00B3F48F /* Exceptions for "OnlineRefractionApp" folder in "OnlineRefractionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Features/FastMode/FastCYLView.swift,
+				Features/VisionTest/CYLAxialV2B.swift,
+				Features/VisionTest/CYLDistanceV2View.swift,
 				Info.plist,
 				Services/SpeechServicing.swift,
 			);
