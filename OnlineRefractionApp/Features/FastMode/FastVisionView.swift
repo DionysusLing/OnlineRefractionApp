@@ -59,9 +59,9 @@ struct FastVisionView: View {
     @State private var lastPDPromptAt = Date.distantPast
     private let pdPromptCooldown: TimeInterval = 6.0
 
-    // ⬇️ 新增：进入页面后的计时，用于“满 2 秒后才开始 PD”
+    // ⬇️ 延迟启动 PD（采样 + 环境光提示）——改为 15 秒
     @State private var appearTime: Date = .distantPast
-    private let pdStartDelaySec: TimeInterval = 2.0
+    private let pdStartDelaySec: TimeInterval = 15.0
 
     // 定时器：E方向 10s，轮询 150ms
     private let eTimer = Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()
@@ -138,7 +138,7 @@ struct FastVisionView: View {
                     
                     Spacer(minLength: 12)
 
-                    // ⬇️ 新增：Ghost 主按钮（紧挨着参数上方）
+                    // 主按钮：与参数区域相邻
                     GhostPrimaryButton(title: "在本距离开始看不清", height: 52)  {
                         triggerShake(atDistance: max(0.20, liveD))
                     }
@@ -165,16 +165,12 @@ struct FastVisionView: View {
                     .foregroundColor(.secondary)
                     .padding(.bottom, 10)
                 }
-                .onAppear {
-                    startVisionHintBlink()
-                }
-                .onDisappear {
-                    showVisionHintLayer = false
-                }
+                .onAppear { startVisionHintBlink() }
+                .onDisappear { showVisionHintLayer = false }
                 .overlay(alignment: .topLeading) {
                     MeasureTopHUD(
                         title:
-                            Text("2 3").foregroundColor(brandGreen) +
+                            Text("2").foregroundColor(brandGreen) +
                             Text(" / 4 视力&瞳距测量").foregroundColor(.secondary),
                         measuringEye: (eye == .left ? .left : .right)
                     )
@@ -200,7 +196,7 @@ struct FastVisionView: View {
             nearStart = nil
             nearWarned = false
 
-            // 记录进入页面的时间（用于“满 2 秒后才开始 PD”）
+            // 记录进入页面的时间（用于“满 15 秒后才启动 PD 相关逻辑”）
             appearTime = Date()
         }
         .onDisappear {
@@ -218,6 +214,9 @@ struct FastVisionView: View {
             // 距离 → 驱动 UI
             let d = max(face.distance_m ?? 0, 0.20)
             liveD = d
+
+            // PD 相关逻辑是否已“解锁”（进入页面已满 15 秒）
+            let pdUnlocked = Date().timeIntervalSince(appearTime) >= pdStartDelaySec
             
             // ① 近距离停留告警
             if d < nearThresholdM {
@@ -232,8 +231,8 @@ struct FastVisionView: View {
                 nearStart = nil
             }
             
-            // ② 环境光判定（仅右眼）
-            if shouldMeasurePD, let lux = face.ambientLux {
+            // ② 环境光判定（仅右眼，且在 pdUnlocked 之后才会生效/播报）
+            if shouldMeasurePD, pdUnlocked, let lux = face.ambientLux {
                 if lux < minLux {
                     if darkStart == nil { darkStart = Date() }
                     if !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
@@ -250,14 +249,11 @@ struct FastVisionView: View {
                 }
             }
             
-            // ③ PD：仅右眼执行；左眼不测 PD
+            // ③ PD：仅右眼执行；左眼不测 PD（同样要求 pdUnlocked）
             if shouldMeasurePD {
                 if state.fast.pdMM == nil {
-                    // 进入满 2 秒 & pitch > +7 才允许开始 PD 采样
-                    let after2s = Date().timeIntervalSince(appearTime) >= pdStartDelaySec
                     let pitchOK = pitchDeg > 7.0
-
-                    if d > 0.20, after2s, pitchOK {
+                    if d > 0.20, pdUnlocked, pitchOK {
                         if !pdSampling {
                             pdSampling = true
                             pdSamples.removeAll()
