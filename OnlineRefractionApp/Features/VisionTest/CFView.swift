@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 映射：1 → +0.90 D；2 → +0.55 D；3 → 0.00 D
+/// 6 格随机数字 · 选“你看到的最大数字”
+/// 数字越大 → 文字越淡 → 记录的屈光值越小
 struct CFView: View {
     enum EyePhase { case right, left, done }
     let origin: CFOrigin
@@ -9,135 +10,153 @@ struct CFView: View {
     @EnvironmentObject var services: AppServices
 
     @State private var phase: EyePhase = .right
-    @State private var selR: Int? = nil
-    @State private var selL: Int? = nil
+    
+    private var stepIndex: Int { origin == .fast ? 1 : 2 }
+    private let totalSteps: Int = 4
+    private var hudTitle: String { "\(stepIndex)/\(totalSteps) 白内障检测" }
+    private var hudTitleText: Text {
+        let stepIndex  = (origin == .fast ? 1 : 2)
+        let totalSteps = 4
+        return Text("\(stepIndex)").foregroundColor(Color(hex: "#28C76F"))
+             + Text(" / \(totalSteps) 白内障检测").foregroundColor(.secondary)
+    }
 
-    private let cfMap: [Int: Double] = [1: 0.90, 2: 0.55, 3: 0.00]
+    // 单个格子
+    private struct Tile: Identifiable, Hashable {
+        let id = UUID()
+        let digit: Int       // 显示的数字（0…9，去重）
+        let color: Color     // 文字颜色（按“数字大小顺序”赋色）
+        let diopter: Double  // 记录的屈光值（按“数字大小顺序”映射）
+    }
+    @State private var tiles: [Tile] = []
+
+    // ✨ 新增：用于控制“延迟 2 秒显示”的任务
+    @State private var tilesWork: DispatchWorkItem?
+
+    // 颜色 & 屈光映射（按“由小到大”的顺序）
+    private let rankColors: [Color] = [
+        Color(hex: "#808080"),
+        Color(hex: "#b3b3b3"),
+        Color(hex: "#e6e6e6"),
+        Color(hex: "#f5f5f5"),
+        Color(hex: "#fafafa"),
+        Color(hex: "#fcfcfc"),
+    ]
+    private let rankDiopters: [Double] = [1.00, 0.90, 0.90, 0.70, 0.55, 0.00]
 
     var body: some View {
         ZStack {
-            // 背景：三等分灰阶 —— 铺满全屏（含安全区）
-            HStack(spacing: 0) {
-                Color(hex: "#FFFFFF")
-                Color(hex: "#FAFAFA")
-                Color(hex: "#E6E6E6")
-            }
-            .ignoresSafeArea()
+            Color.white.ignoresSafeArea() // 纯白背景
 
-            // 底部按钮浮层（不占用布局高度，因此不压缩上面的灰阶）
-            VStack {
-                Spacer()
-                HStack(spacing: 56) {
-                    cfButton(1)
-                    cfButton(2)
-                    cfButton(3)
+            GeometryReader { geo in
+                let w = geo.size.width
+                let itemSide = floor(w / 3)        // 3 列等宽正方形
+
+                VStack {
+                    Spacer(minLength: 0)
+
+                    // 固定高度的容器：即使 tiles 为空也占住 2 行的高度
+                    ZStack(alignment: .center) {
+                        // 占位层（保证高度恒定）
+                        Color.clear
+                            .frame(width: w, height: itemSide * 2)
+
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 3),
+                            spacing: 0
+                        ) {
+                            ForEach(tiles) { t in
+                                ZStack {
+                                    Color.clear
+                                    Text("\(t.digit)")
+                                        .font(.system(size: itemSide * 0.72, weight: .bold, design: .rounded))
+                                        .foregroundColor(t.color)
+                                        .minimumScaleFactor(0.3)
+                                }
+                                .frame(width: itemSide, height: itemSide)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onPick(tile: t) }
+                            }
+                        }
+                        .frame(width: w, height: itemSide * 2, alignment: .center)
+                    }
+
+                    Spacer(minLength: 0)
                 }
-                .padding(.vertical, 12)
-                .padding(.bottom, 10) // 避开 Home 指示条
             }
-            .ignoresSafeArea(edges: .bottom)
+
         }
-        .guardedScreen(brightness: 0.70)
         .overlay(alignment: .topLeading) {
             MeasureTopHUD(
-                title: "白内障检测",
+                title: hudTitleText,
                 measuringEye: (phase == .right ? .right : (phase == .left ? .left : nil))
             )
         }
         .navigationBarTitleDisplayMode(.inline)
-        .guardedScreen(brightness: 0.70) // 或用你的 kExamBrightness
-        .screenSpeech("请闭左眼，单右眼观察屏幕并点击数字报告你在屏幕上看到几档明暗度。", delay: 0.2)
+        .guardedScreen(brightness: 0.70)
+        .onAppear { startRound() }
+        .onChange(of: phase) { _ in if phase == .right || phase == .left { dealTiles() } }
     }
 
-    // MARK: - Button（全彩渐变款）
-    @ViewBuilder
-    private func cfButton(_ n: Int) -> some View {
-        let isSel = (phase == .right ? selR : selL) == n
+    // MARK: - 逻辑
+    private func startRound() {
+        services.speech.stop()
+        services.speech.restartSpeak("请闭左眼，用右眼观察屏幕。点击你看到的最大数字。", delay: 0.20)
+        phase = .right
+        dealTiles()
+    }
 
-        Button {
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            services.speech.stop()
-            record(n)
-        } label: {
-            ZStack {
-                // 底：蓝→青 渐变
-                Circle()
-                    .fill(
-                        LinearGradient(colors: [.cfMainBlue, .cfCyan],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                // 细腻质感：彩色内高光（不用白/黑）
-                Circle()
-                    .strokeBorder(Color.cfHighlight, lineWidth: 1)
-                    .blendMode(.overlay)
+    /// 生成 6 个去重随机数字，按“数字大小”赋色与屈光值，再随机打散位置
+    private func dealTiles() {
+        // ✨ 新增：切换轮次时先清空当前数字，并取消上一次的延迟任务
+        tiles = []
+        tilesWork?.cancel()
 
-                Text("\(n)")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .kerning(0.5)
-                    .foregroundColor(.white) // 深海蓝文本，避免黑
-            }
-            .frame(width: 56, height: 56)
-            .shadow(color: isSel ? Color.cfGlow : .clear, radius: 10, x: 0, y: 4)
+        var pool = Array(0...9); pool.shuffle()
+        let picked = Array(pool.prefix(6)).sorted()              // 按数字升序
+        var arr: [Tile] = []
+        for (i, d) in picked.enumerated() {
+            let color = rankColors[min(i, rankColors.count - 1)]
+            let dio   = rankDiopters[min(i, rankDiopters.count - 1)]
+            arr.append(.init(digit: d, color: color, diopter: dio))
         }
-        .padding(.bottom, 60)
-        .buttonStyle(CFRoundPressStyle())
-        .accessibilityLabel("选择 \(n) 档灰度")
+        let newTiles = arr.shuffled()                            // 随机位置
+
+        // ✨ 新增：延迟 1 秒后再显示数字
+        let work = DispatchWorkItem { self.tiles = newTiles }
+        tilesWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
-    // MARK: - Logic
-    private func record(_ n: Int) {
-        let val = cfMap[n] ?? 0.0
+    private func onPick(tile: Tile) {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+        services.speech.stop()
+
         switch phase {
         case .right:
-            selR = n
-            state.cfRightD = val
-            services.speech.speak("请闭右眼，用左眼观察屏幕并点击数字报告你在屏幕上看到几党明暗度。", after: 0.60)
+            state.cfRightD = tile.diopter
             phase = .left
-        case .left:
-            selL = n
-            state.cfLeftD = val
-            phase = .done
+            services.speech.restartSpeak("请闭右眼，用左眼观察屏幕。点击屏幕上你看到的最大数字。", delay: 0.35)
 
-            // ⬅️ CF 自己决定去向：支流程→快速视力；主流程→散光 5A
+        case .left:
+            state.cfLeftD  = tile.diopter
+            phase = .done
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
                 switch origin {
-                case .fast:
-                    state.path.append(.fastVision(.right))
-                case .main:
-                    state.path.append(.cylR_A)
+                case .fast: state.path.append(.fastVision(.right))
+                case .main: state.path.append(.cylR_A)
                 }
             }
 
-        case .done:
-            break
+        case .done: break
         }
     }
 }
 
-
-// MARK: - Press style（轻微缩放）
-private struct CFRoundPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.18, dampingFraction: 0.9),
-                       value: configuration.isPressed)
-    }
-}
-
-// MARK: - Color helpers
+// MARK: - Color hex
 private extension Color {
-    // 主视觉色
-    static let cfMainBlue   = Color(hex: "#2D6AFF")
-    static let cfCyan       = Color(hex: "#41C8FF")
-
-    // 辅助：描边/高光/发光（均非灰白黑）
-
-    static let cfHighlight  = Color(hex: "#9FDBFF").opacity(0.55)
-    static let cfGlow       = Color(hex: "#89E3FF").opacity(0.55)
-
     init(hex: String) {
         var s = hex; if s.hasPrefix("#") { s.removeFirst() }
         var v: UInt64 = 0; Scanner(string: s).scanHexInt64(&v)

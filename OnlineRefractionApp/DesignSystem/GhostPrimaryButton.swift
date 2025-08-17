@@ -4,18 +4,17 @@ struct GhostPrimaryButton: View {
     let title: String
     var enabled: Bool = true
     var height: CGFloat = 56
-    
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: height * 0.36, weight: .semibold))
                 .foregroundColor(.white.opacity(enabled ? 1 : 0.5))
-                .frame(maxWidth: .infinity, minHeight: height)
-                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity)   // 占满宽度
+                .frame(height: height)        // 精确高度
                 .background(
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: height / 3)
                         .fill(Color.black.opacity(enabled ? 0.80 : 0.40))
                 )
         }

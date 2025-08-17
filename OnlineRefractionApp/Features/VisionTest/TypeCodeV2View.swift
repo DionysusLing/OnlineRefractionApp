@@ -125,7 +125,7 @@ struct TypeCodeV2View: View {
                 Self.hasSpokenIntro = true
             }
             canTapPrimary = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { canTapPrimary = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { canTapPrimary = true }
         }
         .sheet(isPresented: $showService) {
             NavigationStack {

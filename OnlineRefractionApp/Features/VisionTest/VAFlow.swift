@@ -866,13 +866,70 @@ private struct VAEndPage: View {
         }
         .sheet(isPresented: $showingInfo) {
             NavigationStack {
-                ScrollView { Text("有待加入正式内容").padding() }
-                    .navigationTitle("系统是如何通过视力VA计算屈光不正度数？")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-    }
-}
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+
+                        // 开场说明
+                        Group {
+                            Text("        任何一次测量，都不可避免会混入“噪声”。这些噪声大体分两类：随机误差和系统性偏差。随机误差像抛硬币的起伏——受瞬时注意力、眨眼、微小姿态变化、屏幕亮度波动、环境光抖动、相机追踪抖动等影响，数值会在真实值周围上下跳动；系统性偏差则像尺子本身刻度不准——比如距离偏近、手机倾斜、屏幕色彩/亮度校准偏差、个体对“看清”的主观标准偏严或偏宽等，会把结果整体推向一边。")
+                            Text("“多次测量 + 合理汇总”的价值在于：")
+                            Text("1）用统计学方法抵消随机误差；")
+                            Text("2）用流程与门控把系统性偏差压到更低。")
+                        }
+                        // 1
+                        Text("1. 抵消随机误差：均值/中位数让结果更稳定")
+                            .font(.headline)
+                            .padding(.top, 6)
+                        Group {
+                            Text("如果真实值是 μ，每次测量都会得到 μ 附近的一个样本。随机误差的波动大小可以用标准差 σ 描述。把 n 次独立测量取平均后，平均值的波动会降为 σ/√n（平方根法则）。")
+                            Text("示例：做 1 次≈σ；做 4 次≈σ/2；做 9 次≈σ/3。")
+                            Text("因此，哪怕每次都只是“很接近”，把它们平均起来整体就会更接近真实值。若存在偶发离群值，中位数或截尾均值更稳健。")
+                            Text("在本应用中，瞳距（PD）与“最大数字/开口方向”等主观判断不可避免有瞬时波动，重复 2–3 次并汇总可显著降低不确定性。")
+                        }
+                        // 2
+                        Text("2. 降低系统性偏差：流程把关比算术更重要")
+                            .font(.headline)
+                            .padding(.top, 6)
+                        Group {
+                            Text("• 距离/姿态门控：仅在 35cm±容差、手机竖直、头部稳定时采样；不合规就等待。")
+                            Text("• 环境光判定：照度达标后才采集，避免暗光下的系统偏差。")
+                            Text("• 节奏与间隔：语音引导后延时呈现刺激，降低疲劳与学习效应。")
+                            Text("• 对称与顺序：左右眼流程一致，减少顺序效应。")
+                        }
+                        // 3
+                        Text("3. 人因学视角：把主观判断变得更客观")
+                            .font(.headline)
+                            .padding(.top, 6)
+                        Group {
+                            Text("视觉阈值会随对比度、注意力、眨眼时机起伏。单次作答易受策略影响。通过多次弱相关题目，可让偶然侥幸或失误互相抵消，接近稳定能力水平。")
+                            Text("设计要点：随机化数字/朝向；少量重复与短轮次；必要时采用“三题两中”等规则提高鲁棒性。")
+                        }
+                        // 4
+                        Text("4. 如何做汇总更稳妥？")
+                            .font(.headline)
+                            .padding(.top, 6)
+                        Group {
+                            Text("• 3 次取中位数：对离群最稳健。")
+                            Text("• 3 次取均值并四舍五入到临床有效位：更平滑，便于与处方刻度对齐。")
+                            Text("• 超出合理范围时触发“复核一次”：在门控合格后补采一次。")
+                        }
+                        // 结论
+                        Text("结论")
+                            .font(.headline)
+                            .padding(.top, 6)
+                        Text("多次测量并非重复同样的错误，而是在质量门控（距离、姿态、光照）前提下进行若干次独立采样，再用统计汇总把随机噪声压低到原来的 1/√n。配合人因学设计与稳健的汇总策略，就能在短时间内把单次不稳定的读数，转化为可信、可复现的结果。")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .textSelection(.enabled)
+                }
+                .navigationBarTitleDisplayMode(.inline)
+              }
+          }
+      }
+  }
+    
+
 
 // MARK: - HUD (distance bar)
 fileprivate struct DistanceBarsHUD: View {

@@ -26,6 +26,7 @@ struct PDV2View: View {
     private let minLux: Double = 90            // 阈值：≥90 lux 才允许抓取 PD（可按需调）
     @State private var darkStart: Date? = nil   // 连续暗光计时起点
     @State private var darkWarned = false       // 仅提示一次
+    @State private var luxWarnEnabled = false   // ← 进入 11 秒后再允许照度播报/计时
 
     // 三轴显示（中下部）
     @State private var yawDeg: Double = 0
@@ -79,6 +80,7 @@ struct PDV2View: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                Color.clear.frame(height: 20)
                 header
                 card
                 Color.clear.frame(height: 60)
@@ -91,11 +93,24 @@ struct PDV2View: View {
             .padding(24)
         }
         .background(Color.black.ignoresSafeArea())
+        // 左上标题：1 / 4  瞳距测量
+        .overlay(alignment: .topLeading) {
+            MeasureTopHUD(
+                title:
+                    Text("1")
+                        .foregroundColor(Color(red: 0.157, green: 0.78, blue: 0.435)) // #28C76F
+                +   Text(" / 4 瞳距测量")
+                        .foregroundColor(.white.opacity(0.8)),
+                measuringEye: nil,
+                bothActive: true
+            )
+        }
+
         // 进入页播报
         .screenSpeech(
             index == 1
-            ? "开始瞳距测量。请取下眼镜，脸正对手机，与屏幕同高，调整距离到35厘米，让红色测距条变短并消失。"
-            : "开始第\(index)次瞳距测量。",
+            ? "请取下眼镜，调整距离让眼睛离手机三十五厘米，直到测距条变短消失。眼睛要与屏幕同高。"
+            : "开始第\(index)次测量。",
             delay: 0.12
         )
         // 启动
@@ -112,6 +127,12 @@ struct PDV2View: View {
                 startAutoCaptureLoop()
             }
             hapticSuccess.prepare()
+
+            // ← 进入 11 秒后再允许照度播报/计时（不影响 canCaptureNow 判定）
+            luxWarnEnabled = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 11.0) {
+                luxWarnEnabled = true
+            }
         }
         .onDisappear {
             poseTimer?.invalidate(); poseTimer = nil
@@ -119,6 +140,7 @@ struct PDV2View: View {
             // 重置一次环境光提示状态，避免下次进入“已提示”不再播报
             darkStart = nil
             darkWarned = false
+            luxWarnEnabled = false
         }
         // 顶部中间：横向距离条（越接近 35cm 越短）
         .overlay(alignment: .center) {
@@ -200,12 +222,12 @@ struct PDV2View: View {
                 InfoBar(
                     tone: hasResult ? .ok : .info,
                     text: String(
-                        format: "D %@  ·  PD %@",
+                        format: "距离 %@  ·  PD %@",
                         fmtCM(pdSvc.distance_m, unit: "cm", digits: 0, scale: 100.0),
                         fmtIPD(pdSvc.ipd_mm)
                     )
                 )
-                .offset(y: 150)
+                .offset(y: 100)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, 6)
@@ -287,7 +309,7 @@ struct PDV2View: View {
     }
 
     private func complete(with ipd: Double) {
-        hapticSuccess.notificationOccurred(.success) 
+        hapticSuccess.notificationOccurred(.success)
         spin = false
         didHighlight = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { didHighlight = false }
@@ -370,7 +392,8 @@ struct PDV2View: View {
         self.headPoseOK = (stableFor >= poseStableSeconds)
 
         // ★ 环境光：< minLux 连续 1s → 只提示一次（不在此处阻塞；阻塞已由 canCaptureNow 实现）
-        if let lux = pdSvc.ambientLux {
+        // 仅当 luxWarnEnabled==true 才开始计时与播报；未开启前不累计秒数也不播报
+        if luxWarnEnabled, let lux = pdSvc.ambientLux {
             if lux < minLux {
                 if darkStart == nil { darkStart = Date() }
                 if !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
@@ -380,6 +403,9 @@ struct PDV2View: View {
             } else {
                 darkStart = nil // 亮度恢复后重置计时（已提示不重复）
             }
+        } else {
+            // 开关未开启时不累计暗光时间，避免 11s 一到立刻触发
+            darkStart = nil
         }
     }
 

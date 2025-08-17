@@ -1,34 +1,47 @@
 import SwiftUI
 
-/// 顶部测量 HUD：左侧标题 + 右侧左右眼指示
 struct MeasureTopHUD: View {
     enum EyeSide { case left, right }
 
-    let title: String
-    let measuringEye: EyeSide?   // 当前测的眼；nil = 都不高亮（备用）
+    private let titleView: Text
+    let measuringEye: EyeSide?
+    let bothActive: Bool
 
-    var sidePadding: CGFloat = 24          // ← 左右边距
-    var topInset: CGFloat = 6              // ← 顶部额外内边距
-    var titleToChipsMinGap: CGFloat = 12   // ← 标题与图标组的最小间距
-    var body: some View {
-        HStack {
-            // 左上：低调灰色标题
-            Text(title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(Color.gray.opacity(1.00))
-            Spacer(minLength: titleToChipsMinGap)
-
-            // 右上：左右眼指示
-            HStack(spacing: 8) {
-                EyeChip(label: "左", active: measuringEye == .left)
-                EyeChip(label: "右", active: measuringEye == .right)
-            }
-        }
-        .padding(.horizontal, sidePadding)   
-        .padding(.top, 6)
+    // 旧：接收 String，这里统一设为 primary
+    init(title: String, measuringEye: EyeSide?, bothActive: Bool = false) {
+        self.titleView = Text(title)
+        self.measuringEye = measuringEye
+        self.bothActive = bothActive
     }
 
-    // 小胶囊
+    // 新：接收 Text（已带富文本/局部着色），这里不再改色
+    init(title: Text, measuringEye: EyeSide?, bothActive: Bool = false) {
+        self.titleView = title
+        self.measuringEye = measuringEye
+        self.bothActive = bothActive
+    }
+
+    var sidePadding: CGFloat = 24
+    var topInset: CGFloat = 6
+    var titleToChipsMinGap: CGFloat = 12
+
+    var body: some View {
+        HStack {
+            // 不要再统一改色，保留外部传入的局部着色
+            titleView
+                .font(.system(size: 17, weight: .semibold))
+
+            Spacer(minLength: titleToChipsMinGap)
+
+            HStack(spacing: 8) {
+                EyeChip(label: "左", active: bothActive || measuringEye == .left)
+                EyeChip(label: "右", active: bothActive || measuringEye == .right)
+            }
+        }
+        .padding(.horizontal, sidePadding)
+        .padding(.top, topInset)
+    }
+
     private func EyeChip(label: String, active: Bool) -> some View {
         HStack(spacing: 4) {
             Image(systemName: active ? "eye.fill" : "eye")
@@ -37,8 +50,10 @@ struct MeasureTopHUD: View {
         }
         .padding(.horizontal, 1).padding(.vertical, 6)
         .background(
-            Capsule().fill(active ? Color.clear.opacity(0.14) : Color.clear.opacity(0.10))
+            Capsule().fill(active ? Color.clear.opacity(0.14)
+                                  : Color.clear.opacity(0.10))
         )
-        .foregroundColor(active ? .green : Color.gray.opacity(0.70))
+        // 未激活用 primary，激活用绿色
+        .foregroundColor(active ? .green : .secondary)
     }
 }
