@@ -22,9 +22,12 @@ struct CYLplus: View {
     @State private var lockedDistMM: Double? = nil
 
     private var hudTitle: Text {
-        let green = Color(red: 0.157, green: 0.78, blue: 0.435)
-        return Text("3").foregroundColor(green) + Text(" / 4 散光测量").foregroundColor(.secondary)
+        let index = (origin == .fast ? 4 : 3)          // 主流程=3/4，支流程=4/4
+        let green = Color(red: 0.157, green: 0.78, blue: 0.435) // #28C76F
+        return Text("\(index)").foregroundColor(green)
+             + Text(" / 4 散光测量").foregroundColor(.secondary)
     }
+
 
     var body: some View {
         VStack(spacing: 20) {
@@ -75,12 +78,29 @@ struct CYLplus: View {
                         text: String(format: "轴向 %d° · 距离 %.1f mm  ·  已记录", deg, mm))
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             } else {
-                Text(canTap ? "看到最清晰的“黑色实线”时，直接点那根线" : "请听引导后再操作…")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(.gray)
+                VStack(spacing: 6) {
+                    // 行1：文本 + 图标 + 文本
+                    HStack(spacing: 6) {
+                        Text("看到黑色实线最清晰时  ")
+                        Image(systemName: "hand.raised.fill") // 可换 hand.raised / figure.stand
+                            .imageScale(.medium)
+                        Text("定住别动")
+                    }
+
+                    // 行2：点击提示
+                    HStack(spacing: 6) {
+                        Image(systemName: "hand.point.up.left")
+                            .imageScale(.medium)
+                        Text("点击该黑线")
+                    }
+                }
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
             }
 
-            VoiceBar().scaleEffect(0.5)
             Spacer(minLength: 12)
         }
         .overlay(alignment: .topLeading) {
@@ -89,6 +109,7 @@ struct CYLplus: View {
                 measuringEye: (eye == .left ? .left : .right)
             )
             .padding(.top, 6)
+            .padding(.horizontal, -24)
         }
         .navigationBarTitleDisplayMode(.inline)
         .guardedScreen(brightness: 0.70)
@@ -198,3 +219,34 @@ fileprivate struct SolidSpokeSegment: Shape {
         return p
     }
 }
+
+
+#if DEBUG
+import SwiftUI
+
+// 仅本文件可见，避免与别处同名冲突
+fileprivate final class CYLplusPreviewSpeech: SpeechServicing {
+    func speak(_ text: String) {}
+    func restartSpeak(_ text: String, delay: TimeInterval) {}
+    func stop() {}
+}
+
+struct CYLplus_Previews: PreviewProvider {
+    static var previews: some View {
+        let services = AppServices(speech: CYLplusPreviewSpeech())
+        return Group {
+            CYLplus(eye: .right, origin: .main)  // ⚠️ 不要再传 onFinish:
+                .environmentObject(AppState())
+                .environmentObject(services)
+                .previewDisplayName("CYLplus · 主流程 · 右眼")
+                .previewDevice("iPhone 15 Pro")
+
+            CYLplus(eye: .left, origin: .fast)
+                .environmentObject(AppState())
+                .environmentObject(services)
+                .previewDisplayName("CYLplus · 支流程 · 左眼")
+                .previewDevice("iPhone 15 Pro")
+        }
+    }
+}
+#endif

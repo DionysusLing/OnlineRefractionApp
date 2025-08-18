@@ -81,7 +81,7 @@ struct TypeCodeV2View: View {
                         .font(ThemeV2.Fonts.note())
                         .foregroundColor(ThemeV2.Colors.subtext)
 
-                    TextField("在这里输入或粘贴邀请码/输0体验", text: $code)
+                    TextField("在这里输入或粘贴邀请码", text: $code)
                         .keyboardType(.numberPad)
                         .focused($codeFieldFocused)
                         .textFieldStyle(FixedHeightFieldStyle(height: 48))

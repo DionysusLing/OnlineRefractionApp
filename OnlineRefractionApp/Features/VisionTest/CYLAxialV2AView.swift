@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 // MARK: - 5A · 散光盘：引导 + 判定（不测距）
 struct CYLAxial2AView: View {
     enum Phase { case guide, decide }
@@ -16,17 +15,25 @@ struct CYLAxial2AView: View {
     @State private var showChoices = false
     
     // 引导动画：循环随机轴向
-    @State private var guideAnimID = UUID()      // 每次更换 mark 用它强制重播
-    @State private var currentMark: Double = 1.5 // 初始一条轴向（支持 0.5 间隔）
+    @State private var guideAnimID = UUID()
+    @State private var currentMark: Double = 1.5
     @State private var isLooping = false
     @State private var loopWork: DispatchWorkItem?
     
-    // 时序参数（和子动画保持一致）
-    private let animDuration: Double = 5.0 // ← 每次动画播放时长（秒）
+    // 时序参数
+    private let animDuration: Double = 5.0
     private let loopGap: Double = 0.4
     
     private var guideButtonTitle: String {
         eye == .right ? "开始闭左眼测右眼" : "开始闭右眼测左眼"
+    }
+
+    // ✅ 与 CYLplus 完全一致的标题样式与规则
+    private var hudTitle: Text {
+        let index = (origin == .fast ? 4 : 3)            // 主流程=3/4，支流程=4/4
+        let green = Color(red: 0.157, green: 0.78, blue: 0.435) // #28C76F
+        return Text("\(index)").foregroundColor(green)
+             + Text(" / 4 散光测量").foregroundColor(.secondary)
     }
     
     var body: some View {
@@ -37,9 +44,9 @@ struct CYLAxial2AView: View {
                 Group {
                     if phase == .guide {
                         AstigmatismSolidifyAnimation(
-                            mark: currentMark,          // ← 动态轴向
-                            duration: animDuration,     // 每段时长
-                            maxBlur: 6,                 // 底盘最大模糊
+                            mark: currentMark,
+                            duration: animDuration,
+                            maxBlur: 6,
                             starColor: .black,
                             solidColor: .black,
                             spokes: 24,
@@ -52,9 +59,8 @@ struct CYLAxial2AView: View {
                         )
                         .frame(width: min(g.size.width * 0.80, 360))
                         .offset(y: -60)
-                        .id(guideAnimID)              // ← 更换 ID 触发重播
+                        .id(guideAnimID)
                     } else {
-                        // —— 专业矢量散光盘（唯一主体） —— //
                         CylStarVector(
                             spokes: 24,
                             innerRadiusRatio: 0.23,
@@ -66,24 +72,27 @@ struct CYLAxial2AView: View {
                             lineCap: .butt
                         )
                         .frame(width: 320, height: 320)
-                        .offset(y: -48)
+                        .offset(y: -18)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .offset(y: (phase == .decide && showChoices) ? -90 : 0)
                 .animation(.easeInOut(duration: 0.25), value: showChoices)
+
+                // ✅ 顶部 HUD：用动态标题 + 与 CYLplus 相同的边距
                 .overlay(alignment: .topLeading) {
                     MeasureTopHUD(
-                        title: "散光范例",
+                        title: hudTitle,
                         measuringEye: (eye == .left ? .left : .right)
                     )
+                    .padding(.top, 6)
                 }
                 
                 // —— 底部操作区 —— //
                 VStack(spacing: 16) {
                     if phase == .guide {
                         GhostPrimaryButton(title: guideButtonTitle) {
-                            stopGuideLoop()             // ← 立刻停止循环动画
+                            stopGuideLoop()
                             phase = .decide
                             showChoices = false
                             speakEyePrompt()
@@ -102,10 +111,9 @@ struct CYLAxial2AView: View {
                             GhostPrimaryButton(title: "有清晰黑色实线") { answer(true)  }
                         }
                     }
-                    VoiceBar().scaleEffect(0.5)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 2)
+                .padding(.bottom, 26)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
@@ -115,18 +123,12 @@ struct CYLAxial2AView: View {
             guard !didSpeak else { return }
             didSpeak = true
             runGuideSpeechAndGate()
-            startGuideLoop() // 进入页面就开播
+            startGuideLoop()
         }
-        .onDisappear {
-            stopGuideLoop()
-        }
+        .onDisappear { stopGuideLoop() }
         .onChange(of: phase) { _, p in
-            if p == .guide {
-                runGuideSpeechAndGate()
-                startGuideLoop()
-            } else {
-                stopGuideLoop()
-            }
+            if p == .guide { runGuideSpeechAndGate(); startGuideLoop() }
+            else           { stopGuideLoop() }
         }
     }
     
@@ -224,3 +226,34 @@ struct CYLAxial2AView: View {
         answer(true)
     }
 }
+
+
+#if DEBUG
+import SwiftUI
+
+// 仅本文件可见，避免与别处同名冲突
+fileprivate final class CYLAxial2AViewPreviewSpeech: SpeechServicing {
+    func speak(_ text: String) {}
+    func restartSpeak(_ text: String, delay: TimeInterval) {}
+    func stop() {}
+}
+
+struct CYLAxialV2AView_Previews: PreviewProvider {
+    static var previews: some View {
+        let services = AppServices(speech: CYLAxial2AViewPreviewSpeech())
+        return Group {
+            CYLAxial2AView(eye: .right, origin: .main)
+                .environmentObject(AppState())
+                .environmentObject(services)
+                .previewDisplayName("A · 主流程 · 右眼")
+                .previewDevice("iPhone 15 Pro")
+
+            CYLAxial2AView(eye: .left, origin: .fast)
+                .environmentObject(AppState())
+                .environmentObject(services)
+                .previewDisplayName("A · 支流程 · 左眼")
+                .previewDevice("iPhone 15 Pro")
+        }
+    }
+}
+#endif

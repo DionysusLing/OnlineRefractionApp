@@ -22,8 +22,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Features/FastMode/FastCYLView.swift,
-				Features/VisionTest/CYLAxialV2B.swift,
-				Features/VisionTest/CYLDistanceV2View.swift,
 				Info.plist,
 				Services/SpeechServicing.swift,
 			);

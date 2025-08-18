@@ -10,29 +10,35 @@ struct FastVisionView: View {
     @EnvironmentObject var services: AppServices
     let eye: Eye
 
-    // 仅右眼测 PD
-    private var shouldMeasurePD: Bool { eye == .right }
+    // 可选显示
+    @State private var showHUD: Bool = true
+    @State private var showDebugInfo: Bool = true
+
+    // 点击后隐藏 E 与按钮，留空白期
+    @State private var contentVisible: Bool = true
+
+    // ⭐ 仅左眼测 PD
+    private var shouldMeasurePD: Bool { eye == .left }
 
     // TrueDepth：面距/PD
     @StateObject private var face = FacePDService()
 
-    // E 方向：每 4 秒随机一组（代码里是 10s，可按需改）
+    // E 方向：每 10s 随机
     @State private var orientations: [EOrientation] = [.up, .right, .down, .left]
 
     // 实时距离（米）
     @State private var liveD: Double = 0.20
-    
-    // ===== 引导底（矩形）=====
+
+    // 引导底
     @State private var showVisionHintLayer = true
     @State private var visionHintVisible   = true
-
     private let visionHintDuration : Double  = 1.5
     private let visionHintBlinkCount: Int    = 4
     private let visionHintAspect     : CGFloat = 0.20
     private let visionHintOpacity    : Double  = 0.40
-    private let visionHintYOffset    : CGFloat = 0.45
+    private let visionHintYOffset    : CGFloat = 0.42
 
-    // ===== 用 pitch 做“摇头”判定（极简状态机）=====
+    // 摇头判定
     @State private var pitchDeg: Double = 0
     @State private var windowStart: Date? = nil
     @State private var seenNeg = false
@@ -40,51 +46,50 @@ struct FastVisionView: View {
     @State private var lastShakeAt = Date.distantPast
     @State private var poseTimer: Timer? = nil
 
-    // ====== 右→左的延时跳转控制 ======
+    // 跳转控制
     @State private var isSwitching = false
     @State private var isAlive = true
-    private let switchDelaySec: Double = 2.0
-    
-    // ===== 环境光门控（lux）=====
-    private let minLux: Double = 100
+    private let switchDelaySec: Double = 1.0   // ⭐ 空白期 1s
+
+    // ===== 环境光门控（立即生效拦截；播报需 15s 解锁）=====
+    private let minLux: Double = 200
+    @State private var isTooDark: Bool = false
     @State private var darkStart: Date? = nil
     @State private var darkWarned = false
-    
-    // ===== PD 采样（仅右眼）=====
+
+    // ===== PD 采样（仅左眼；5s 解锁）=====
     @State private var pdSampling = false
     @State private var pdSamples: [Double] = []
     @State private var pdWindowStart: Date?
-    
     @State private var pdPromptedOnce = false
     @State private var lastPDPromptAt = Date.distantPast
     private let pdPromptCooldown: TimeInterval = 6.0
 
-    // ⬇️ 延迟启动 PD（采样 + 环境光提示）——改为 15 秒
+    // 进入页面时间
     @State private var appearTime: Date = .distantPast
-    private let pdStartDelaySec: TimeInterval = 15.0
+    private let luxUnlockDelaySec: TimeInterval = 13.0  // ⭐ 照度播报解锁 15s
+    private let pdUnlockDelaySec : TimeInterval = 5.0   // ⭐ PD 采样解锁 5s
 
-    // 定时器：E方向 10s，轮询 150ms
+    // 定时器
     private let eTimer = Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()
     private let poll   = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
-    
-    // ===== 近距离停留告警 =====
+
+    // 近距离停留告警
     private let nearThresholdM: Double = 0.25
     private let nearHoldSec:    Double = 5.0
     @State private var nearStart: Date? = nil
     @State private var nearWarned: Bool = false
 
-    // 参数
+    // 摇头参数
     private let pitchEnter: Double = 15.0
     private let windowSec: Double  = 2.0
     private let cooldown:  Double  = 0.6
-    
+
     private func startVisionHintBlink() {
         showVisionHintLayer = true
         visionHintVisible = true
-
         let n = max(1, visionHintBlinkCount)
         let step = visionHintDuration / Double(n * 2)
-
         for i in 1...(n * 2) {
             DispatchQueue.main.asyncAfter(deadline: .now() + step * Double(i)) {
                 withAnimation(.easeInOut(duration: max(0.12, step * 0.8))) {
@@ -96,19 +101,19 @@ struct FastVisionView: View {
             showVisionHintLayer = false
         }
     }
-
+    
+    // MARK: - Body
     var body: some View {
         GeometryReader { geo in
             let padding: CGFloat = 24
             let availableW = max(0, geo.size.width - padding * 2)
-            // 20/20（5′）整字高 → points（严格物理）
-            let sidePt = e20LetterHeightPoints(distanceM: CGFloat(liveD))
-            // 4 个 E + 3 个间隔(=边长) → 7*side
+            let sidePt = e20LetterHeightPoints(pointsDistanceM: CGFloat(liveD))
             let side = min(sidePt, availableW / 7.0)
-            let brandGreen = Color(red: 0.157, green: 0.78, blue: 0.435) // #28C76F
-            
+            let brandGreen = Color(red: 0.157, green: 0.78, blue: 0.435)
+
             ZStack {
                 Color.white.ignoresSafeArea()
+
                 if showVisionHintLayer {
                     GeometryReader { g in
                         RoundedRectangle(cornerRadius: 0)
@@ -123,55 +128,57 @@ struct FastVisionView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
-                
-                VStack(spacing: 8) {
-                    Spacer(minLength: 12)
-                    
-                    // 中部：横排 4 个 E
-                    HStack(spacing: side) {
-                        eCell(orientations[0], side: side)
-                        eCell(orientations[1], side: side)
-                        eCell(orientations[2], side: side)
-                        eCell(orientations[3], side: side)
-                    }
-                    .padding(.horizontal, padding)
-                    
-                    Spacer(minLength: 12)
 
-                    // 主按钮：与参数区域相邻
-                    GhostPrimaryButton(title: "在本距离开始看不清", height: 52)  {
-                        triggerShake(atDistance: max(0.20, liveD))
-                    }
-                    .padding(.horizontal, padding)
-                    .padding(.bottom, 6)
+                if contentVisible {
+                    VStack(spacing: 8) {
+                        Spacer(minLength: 12)
 
-                    // 底部：距离 & PD + 调试
-                    HStack {
-                        let pitchStr = String(format: "pitch %+0.1f°", pitchDeg)
-                        let distStr  = String(format: "距离 %.2f m", liveD)
-                        let pdStr    = "瞳距 " + (state.fast.pdMM.map { String(format: "%.1f mm", $0) } ?? "测量中…")
-                        let luxStr   = "照度 ≈ " + (face.ambientLux.map { String(format: "%.0f", $0) } ?? "—") + " lux"
+                        // E 视标
+                        HStack(spacing: side) {
+                            eCell(orientations[0], side: side)
+                            eCell(orientations[1], side: side)
+                            eCell(orientations[2], side: side)
+                            eCell(orientations[3], side: side)
+                        }
+                        .padding(.horizontal, padding)
 
-                        Text([pitchStr, distStr, pdStr, luxStr].joined(separator: "   "))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    
-                    .padding(.bottom, 10)
+                        Spacer(minLength: 12)
+
+                        // 主按钮（照度不足时禁用 + 变灰）
+                        GhostPrimaryButton(title: "在本距离开始看不清", height: 52)  {
+                            triggerShake(atDistance: max(0.20, liveD))
+                        }
+                        .disabled(isTooDark)
+                        .opacity(isTooDark ? 0.45 : 1.0)
+                        .padding(.horizontal, padding)
+                        .padding(.bottom, 6)
+
+                        // 调试信息（可开关）
+                        if showDebugInfo {
+                            HStack {
+                                let pitchStr = String(format: "pitch %+0.1f°", pitchDeg)
+                                let distStr  = String(format: "距离 %.2f m", liveD)
+                                let pdStr    = "瞳距 " + (state.fast.pdMM.map { String(format: "%.1f mm", $0) } ?? "—")
+                                let luxStr   = "照度 ≈ " + (face.ambientLux.map { String(format: "%.0f", $0) } ?? "—") + " lux"
+                                Text([pitchStr, distStr, pdStr, luxStr].joined(separator: "   "))
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            .padding(.bottom, 10)
+                        }
                     }
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, 10)
+                    .onAppear { startVisionHintBlink() }
+                    .onDisappear { showVisionHintLayer = false }
                 }
-                .onAppear { startVisionHintBlink() }
-                .onDisappear { showVisionHintLayer = false }
-                .overlay(alignment: .topLeading) {
+            }
+            .overlay(alignment: .topLeading) {
+                if showHUD {
                     MeasureTopHUD(
-                        title:
-                            Text("2").foregroundColor(brandGreen) +
-                            Text(" / 4 视力&瞳距测量").foregroundColor(.secondary),
+                        title: Text("2").foregroundColor(brandGreen)
+                             + Text(" / 4 视力&瞳距测量").foregroundColor(.secondary),
                         measuringEye: (eye == .left ? .left : .right)
                     )
                 }
@@ -179,13 +186,23 @@ struct FastVisionView: View {
         }
         .guardedScreen(brightness: 0.80)
         .onAppear {
-            services.speech.restartSpeak(
-                "请由近推远移动手机，观察意视标。看不清意的开口方向时，请点击按钮或左右摇头表示看不清了。测\(eye == .right ? "右眼" : "左眼")。",
-                delay: 0
-            )
+            // 语音：右眼播全段；左眼只播“现在测左眼。”
+            services.speech.stop()
+            if eye == .right {
+                services.speech.restartSpeak(
+                    "请由近推远移动手机，观察视标。看不清开口方向时，请点击按钮或左右摇头表示看不清了。现在测右眼。",
+                    delay: 0
+                )
+            } else {
+                services.speech.restartSpeak("现在测左眼。", delay: 0)
+            }
+
+            contentVisible = true
             face.start()
-            startPoseTimer()                                 // 30Hz 姿态轮询
+            startPoseTimer()
             liveD = max(face.distance_m ?? 0, 0.20)
+
+            // 状态复位
             pdPromptedOnce = false
             lastPDPromptAt = .distantPast
             pdSampling = false
@@ -195,8 +212,9 @@ struct FastVisionView: View {
             darkWarned = false
             nearStart = nil
             nearWarned = false
+            isTooDark = false
 
-            // 记录进入页面的时间（用于“满 15 秒后才启动 PD 相关逻辑”）
+            // 记录进入页面的时刻
             appearTime = Date()
         }
         .onDisappear {
@@ -211,45 +229,44 @@ struct FastVisionView: View {
             orientations = [.up, .right, .down, .left].shuffled()
         }
         .onReceive(poll) { _ in
-            // 距离 → 驱动 UI
             let d = max(face.distance_m ?? 0, 0.20)
             liveD = d
 
-            // PD 相关逻辑是否已“解锁”（进入页面已满 15 秒）
-            let pdUnlocked = Date().timeIntervalSince(appearTime) >= pdStartDelaySec
-            
+            // 解锁：分开计算
+            let since = Date().timeIntervalSince(appearTime)
+            let luxUnlocked = since >= luxUnlockDelaySec   // 播报解锁 15s
+            let pdUnlocked  = since >= pdUnlockDelaySec    // PD 解锁 5s
+
             // ① 近距离停留告警
             if d < nearThresholdM {
-                if nearStart == nil {
-                    nearStart = Date()
-                } else if !nearWarned, let start = nearStart,
-                          Date().timeIntervalSince(start) >= nearHoldSec {
+                if nearStart == nil { nearStart = Date() }
+                else if !nearWarned, let s = nearStart, Date().timeIntervalSince(s) >= nearHoldSec {
                     nearWarned = true
                     services.speech.restartSpeak("你或需极近距离才能测量，请转用医师模式。", delay: 0)
                 }
             } else {
                 nearStart = nil
             }
-            
-            // ② 环境光判定（仅右眼，且在 pdUnlocked 之后才会生效/播报）
-            if shouldMeasurePD, pdUnlocked, let lux = face.ambientLux {
-                if lux < minLux {
+
+            // ② 环境照度：拦截立即生效；语音提示需 luxUnlocked
+            if let lux = face.ambientLux {
+                let darkNow = lux < minLux
+                if darkNow {
                     if darkStart == nil { darkStart = Date() }
-                    if !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
+                    if luxUnlocked, !darkWarned, let s = darkStart, Date().timeIntervalSince(s) >= 1.0 {
                         darkWarned = true
                         services.speech.restartSpeak("环境偏暗，请在明亮环境测试。", delay: 0)
                     }
-                    if pdSampling {
-                        pdSampling = false
-                        pdWindowStart = nil
-                        pdSamples.removeAll()
-                    }
                 } else {
                     darkStart = nil
+                    darkWarned = false
                 }
+                isTooDark = darkNow
+            } else {
+                isTooDark = false
             }
-            
-            // ③ PD：仅右眼执行；左眼不测 PD（同样要求 pdUnlocked）
+
+            // ③ PD：仅左眼；不受照度拦截影响；需 pdUnlocked
             if shouldMeasurePD {
                 if state.fast.pdMM == nil {
                     let pitchOK = pitchDeg > 7.0
@@ -272,7 +289,6 @@ struct FastVisionView: View {
                             pdSamples.removeAll()
                         }
                     } else if pdSampling {
-                        // 条件不满足时立即停止并清空（不提示）
                         pdSampling = false
                         pdWindowStart = nil
                         pdSamples.removeAll()
@@ -283,13 +299,15 @@ struct FastVisionView: View {
                 pdWindowStart = nil
                 pdSamples.removeAll()
             }
-            
-            // ④ 简单摇头规则：2 秒窗口内 pitch<-15 与 >+15 各一次
+
+            // ④ 摇头窗口：2s 内一正一负；禁用条件增加 !isTooDark
             let now = Date()
             if let start = windowStart, now.timeIntervalSince(start) > windowSec {
                 windowStart = nil; seenNeg = false; seenPos = false
             }
-            if windowStart != nil, seenNeg, seenPos, now.timeIntervalSince(lastShakeAt) > cooldown {
+            if windowStart != nil, seenNeg, seenPos,
+               now.timeIntervalSince(lastShakeAt) > cooldown,
+               !isSwitching, contentVisible, !isTooDark {
                 triggerShake(atDistance: d)
             }
         }
@@ -310,7 +328,7 @@ struct FastVisionView: View {
         .frame(width: side, height: side)
     }
 
-    // MARK: - 30Hz 姿态轮询（只读 pitch）
+    // MARK: - 姿态轮询
     private func startPoseTimer() {
         poseTimer?.invalidate()
         poseTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
@@ -324,22 +342,18 @@ struct FastVisionView: View {
             let fa = frame.anchors.compactMap({ $0 as? ARFaceAnchor }).first
         else { return }
 
-        // 相机坐标
         let camT = frame.camera.transform
         let M = simd_inverse(camT) * fa.transform
 
-        // 前向向量（朝相机）
         let f = SIMD3<Float>(M.columns.2.x, M.columns.2.y, M.columns.2.z)
         let fwd = simd_normalize(-f)
 
-        // pitch（+抬头 / −低头），折叠到 ±90°
         let raw = atan2f(fwd.y, fwd.z) * 180 / .pi
         @inline(__always) func fold90(_ a: Float) -> Float {
             var x = a; if x < -90 { x += 180 } else if x > 90 { x -= 180 }; return x
         }
         pitchDeg = Double(fold90(raw))
 
-        // —— 阈值更新
         if windowStart == nil {
             if pitchDeg <= -pitchEnter {
                 windowStart = Date(); seenNeg = true; seenPos = false
@@ -352,20 +366,23 @@ struct FastVisionView: View {
         }
     }
 
-    // MARK: - 触发一次“摇头”（按钮也复用此逻辑）
+    // MARK: - 触发一次“摇头/按钮”
     private func triggerShake(atDistance d: Double) {
+        let now = Date()
         if isSwitching { return }
+        if now.timeIntervalSince(lastShakeAt) < cooldown { return }
+        lastShakeAt = now
 
-        lastShakeAt = Date()
+        // 清状态，避免连击
         windowStart = nil; seenNeg = false; seenPos = false
 
+        // 记录距离
         let dist = max(0.20, d)
         if eye == .right { state.fast.rightClearDistM = dist }
         else             { state.fast.leftClearDistM  = dist }
 
-        // 仅右眼需要等待 PD 完成；左眼不等待
-        guard state.fast.pdMM != nil else {
-            let now = Date()
+        // ⭐ 右眼需等待 PD（左眼不需要）
+        if eye == .left, state.fast.pdMM == nil {
             if !pdPromptedOnce && now.timeIntervalSince(lastPDPromptAt) >= pdPromptCooldown {
                 services.speech.restartSpeak("仍在测量瞳距，稍等。", delay: 0)
                 lastPDPromptAt = now
@@ -374,35 +391,40 @@ struct FastVisionView: View {
             return
         }
 
+        // 锁死本轮交互
+        isSwitching = true
+        contentVisible = false
+        poseTimer?.invalidate()
+
         if eye == .right {
             services.speech.restartSpeak("已记录，换测左眼，方法相同。", delay: 0)
-            isSwitching = true
             DispatchQueue.main.asyncAfter(deadline: .now() + switchDelaySec) {
-                guard isAlive && isSwitching else { return }
+                guard isAlive else { return }
                 isSwitching = false
                 state.path.append(.fastVision(.left))
             }
         } else {
-            services.speech.restartSpeak("已记录", delay: 0)
-            state.path.append(.fastCYL(.right))
+            services.speech.restartSpeak("已记录。", delay: 0)
+            // ⭐ 等 1 秒再跳，保证语音能完整播出
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                state.path.append(.fastCYL(.right)) // Router 会映射到 CYLAxial2AView(.right, .fast)
+            }
         }
     }
 
-    // MARK: - 20/20（5′）→ points（严格物理）
-    private func e20LetterHeightPoints(distanceM d: CGFloat) -> CGFloat {
+    // MARK: - 20/20（5′）→ points
+    private func e20LetterHeightPoints(pointsDistanceM d: CGFloat) -> CGFloat {
         let theta: CGFloat = (5.0 / 60.0) * .pi / 180.0
         let heightM = 2.0 * d * tan(theta / 2.0)
         let heightMM = heightM * 1000.0
         let ptPerMM = pointsPerMillimeter()
         return max(1, heightMM * ptPerMM)
     }
-
     private func pointsPerMillimeter() -> CGFloat {
         let ppi = currentDevicePPI()
         let pxPerMM = ppi / 25.4
         return pxPerMM / UIScreen.main.scale
     }
-
     private func currentDevicePPI() -> CGFloat {
         var sys = utsname(); uname(&sys)
         let id = withUnsafePointer(to: &sys.machine) {
@@ -424,13 +446,13 @@ struct FastVisionView: View {
 #if DEBUG
 import SwiftUI
 
-/// 静音版语音服务，预览时不发声
 final class SilentSpeechService: SpeechServicing {
     func speak(_ text: String) {}
+    func restartSpeak(_ text: String, delay: TimeInterval) {}
     func stop() {}
 }
 
-struct FastVisionView_OneLineParams_Previews: PreviewProvider {
+struct FastVisionView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             FastVisionView(eye: .right)
