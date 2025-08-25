@@ -64,7 +64,7 @@ struct FastVisionView: View {
     @State private var pdPromptedOnce = false
     @State private var lastPDPromptAt = Date.distantPast
     private let pdPromptCooldown: TimeInterval = 6.0
-
+    
     // 进入页面时间
     @State private var appearTime: Date = .distantPast
     private let luxUnlockDelaySec: TimeInterval = 13.0  // ⭐ 照度播报解锁 15s

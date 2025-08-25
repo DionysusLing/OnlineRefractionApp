@@ -21,13 +21,16 @@ struct CYLplus: View {
     @State private var lockedAxisDeg: Int? = nil
     @State private var lockedDistMM: Double? = nil
 
+    // 仅当上一页选择了“疑似有清晰黑色实线”时，不记录焦线距离
+    private var suspectThisEye: Bool { eye == .right ? state.cylR_suspect : state.cylL_suspect }
+    private var shouldRecordDistance: Bool { !suspectThisEye }
+
     private var hudTitle: Text {
         let index = (origin == .fast ? 4 : 3)          // 主流程=3/4，支流程=4/4
         let green = Color(red: 0.157, green: 0.78, blue: 0.435) // #28C76F
         return Text("\(index)").foregroundColor(green)
              + Text(" / 4 散光测量").foregroundColor(.secondary)
     }
-
 
     var body: some View {
         VStack(spacing: 20) {
@@ -73,24 +76,25 @@ struct CYLplus: View {
 
             Spacer(minLength: 24)
 
-            if hasLocked, let deg = lockedAxisDeg, let mm = lockedDistMM {
-                InfoBar(tone: .ok,
-                        text: String(format: "轴向 %d° · 距离 %.1f mm  ·  已记录", deg, mm))
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            // ✅ 结果条：若只记轴向，就不显示距离
+            if hasLocked, let deg = lockedAxisDeg {
+                if let mm = lockedDistMM {
+                    InfoBar(tone: .ok, text: String(format: "轴向 %d° · 距离 %.1f mm  ·  已记录", deg, mm))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                } else {
+                    InfoBar(tone: .ok, text: String(format: "轴向 %d°  ·  已记录", deg))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             } else {
                 VStack(spacing: 6) {
-                    // 行1：文本 + 图标 + 文本
                     HStack(spacing: 6) {
                         Text("看到黑色实线最清晰时  ")
-                        Image(systemName: "hand.raised.fill") // 可换 hand.raised / figure.stand
+                        Image(systemName: "hand.raised.fill")
                             .imageScale(.medium)
                         Text("定住别动")
                     }
-
-                    // 行2：点击提示
                     HStack(spacing: 6) {
-                        Image(systemName: "hand.point.up.left")
-                            .imageScale(.medium)
+                        Image(systemName: "hand.point.up.left").imageScale(.medium)
                         Text("点击该黑线")
                     }
                 }
@@ -98,7 +102,6 @@ struct CYLplus: View {
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-
             }
 
             Spacer(minLength: 12)
@@ -142,17 +145,20 @@ struct CYLplus: View {
         canTap = false
 
         services.speech.stop()
-        services.speech.restartSpeak(
-            "请前后缓慢移动手机。当看到散光盘上某一方向像“黑色实线”时，直接点那根实线，我们将记录该方向与此刻距离。",
-            delay: 0.25
-        )
+        // 疑似：只说“点那根线”；非疑似：再补充“记录该方向与此刻距离”
+        let text = suspectThisEye
+            ? "请前后缓慢移动手机。当看到散光盘上某一方向出现“黑色实线”时，直接点那根实线。"
+            : "请前后缓慢移动手机。当看到散光盘上某一方向出现“黑色实线”且实线最清晰时，点那根实线，系统将记录该轴向与距离。"
+        services.speech.restartSpeak(text, delay: 0.25)
+
         DispatchQueue.main.asyncAfter(deadline: .now() + speechGate) {
             canTap = true
         }
     }
 
-    // 点击 → 量化轴向 + 记录距离 + 内部路由
+    /// 点击 → 量化轴向 + （可选）记录距离 + 内部路由
     private func lockAt(location p: CGPoint, in size: CGSize) {
+        // 量化轴向（15°一档，12→180°）
         let cx = size.width  * 0.5
         let cy = size.height * 0.5
         let dx = p.x - cx
@@ -167,18 +173,29 @@ struct CYLplus: View {
         if clock == 13 { clock = 1 }
         let axisDeg = (clock == 12) ? 180 : clock * 15
 
+        // 实测距离（mm）
         let mm = max(0.0, (svc.distance_m ?? 0) * 1000.0)
 
+        // 状态写入：轴向一定写；距离**仅在非疑似**时写入
         if eye == .right {
             state.cylR_axisDeg = axisDeg
-            state.cylR_clarityDist_mm = mm
+            if shouldRecordDistance {
+                state.cylR_clarityDist_mm = mm
+            } else {
+                state.cylR_clarityDist_mm = nil   // 清旧值，避免残留
+            }
         } else {
             state.cylL_axisDeg = axisDeg
-            state.cylL_clarityDist_mm = mm
+            if shouldRecordDistance {
+                state.cylL_clarityDist_mm = mm
+            } else {
+                state.cylL_clarityDist_mm = nil
+            }
         }
 
+        // 本页显示用：只在需要记录时赋值；否则保持 nil，这样 InfoBar 只显示轴向
         lockedAxisDeg = axisDeg
-        lockedDistMM  = mm
+        lockedDistMM  = shouldRecordDistance ? mm : nil
         hasLocked = true
 
         services.speech.stop()
@@ -220,11 +237,9 @@ fileprivate struct SolidSpokeSegment: Shape {
     }
 }
 
-
 #if DEBUG
 import SwiftUI
 
-// 仅本文件可见，避免与别处同名冲突
 fileprivate final class CYLplusPreviewSpeech: SpeechServicing {
     func speak(_ text: String) {}
     func restartSpeak(_ text: String, delay: TimeInterval) {}
@@ -235,7 +250,7 @@ struct CYLplus_Previews: PreviewProvider {
     static var previews: some View {
         let services = AppServices(speech: CYLplusPreviewSpeech())
         return Group {
-            CYLplus(eye: .right, origin: .main)  // ⚠️ 不要再传 onFinish:
+            CYLplus(eye: .right, origin: .main)
                 .environmentObject(AppState())
                 .environmentObject(services)
                 .previewDisplayName("CYLplus · 主流程 · 右眼")

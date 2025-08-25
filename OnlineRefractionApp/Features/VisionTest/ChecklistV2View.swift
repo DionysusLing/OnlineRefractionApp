@@ -16,14 +16,15 @@ struct ChecklistV2View: View {
     @EnvironmentObject var services: AppServices
 
     var onNext: () -> Void
+    // init 里：items 默认全部为 true（全勾）
     init(onNext: @escaping () -> Void = {}) {
         self.onNext = onNext
-        // items 与 metas 数量保持一致
-        self._items = State(initialValue: Array(repeating: false, count: metas.count))
+        // 默认全为 true => 全部蓝勾
+        self._items = State(initialValue: Array(repeating: true, count: metas.count))
     }
-
     // 各项勾选状态（数量 = metas.count）
     @State private var items: [Bool]
+    private var allChecked: Bool { items.allSatisfy { $0 } }
 
     // 头图高度（和其它 v2 页面对齐）
     private let headerH: CGFloat = 180
@@ -38,8 +39,6 @@ struct ChecklistV2View: View {
         .init(symbol: "figure.run",           title: "过去2小时无剧烈运动",           tone: .neutral),
         .init(symbol: "eye.trianglebadge.exclamationmark", title: "眼部没有生理性异常或病变", tone: .neutral)
     ]
-
-    private var allChecked: Bool { items.allSatisfy { $0 } }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -60,10 +59,19 @@ struct ChecklistV2View: View {
 
                     Spacer(minLength: 18)
                     // 底部主按钮（先）
-                    GlowButton(title: "要求符合", disabled: false) {
+                    // 计算属性（你已有）
+
+
+                    // 底部主按钮（保持在原位置）
+                    GlowButton(title: "要求符合", disabled: !allChecked) {
+                        // 双保险：就算样式错了也不继续
+                        guard allChecked else { return }
                         onNext()
                     }
+                    .disabled(!allChecked)                               // ← 真正禁用交互
+                    .animation(.easeInOut(duration: 0.15), value: allChecked)   // 可选：交互/样式联动更顺滑
                     .padding(.top, 8)
+
 
                     // 语音按钮（后）
                     HStack { Spacer(); SpeakerView(); Spacer() }
